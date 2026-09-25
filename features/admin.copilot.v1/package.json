@@ -12,6 +12,7 @@
         "@mui/icons-material": "^5.11.16",
         "@mui/material": "^5.13.0",
         "@oxygen-ui/react": "^2.4.5",
+        "@wso2/live-chat-client": "file:./vendor/wso2-live-chat-client-0.1.0.tgz",
         "@wso2is/admin.core.v1": "workspace:^",
         "@wso2is/core": "^2.13.0",
         "@wso2is/i18n": "^2.39.0",

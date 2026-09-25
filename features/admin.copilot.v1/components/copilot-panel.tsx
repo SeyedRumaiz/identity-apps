@@ -31,6 +31,7 @@ import CopilotChat from "./copilot-chat";
 import CopilotHeader from "./copilot-header";
 import CopilotWelcome from "./copilot-welcome";
 import useCopilotPanel from "../hooks/use-copilot-panel";
+import { abortEngineerStream } from "../store/actions/copilot";
 import { CopilotContentType } from "../store/types/copilot-action-types";
 
 /**
@@ -84,6 +85,20 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
             loadHistory();
         }
     }, [ isVisible, isAuthenticated, loadHistory ]);
+
+    /**
+     * The panel is toggled via isVisible rather than unmounted/remounted
+     * for a normal show/hide, so this only fires on a genuine unmount
+     * (e.g. navigating away from the Console shell entirely) -- but that's
+     * exactly when a still-active engineer-chat SSE stream would otherwise
+     * leak, since nothing else in this component's lifecycle guarantees
+     * its unsubscribe() gets called.
+     */
+    useEffect(() => {
+        return () => {
+            abortEngineerStream();
+        };
+    }, []);
 
     /**
      * Handle panel close.
