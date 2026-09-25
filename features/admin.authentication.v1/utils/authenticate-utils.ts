@@ -112,6 +112,13 @@ export class AuthenticateUtils {
         let baseUrls: string[] = window["AppUtils"]?.getConfig()?.idpConfigs?.baseUrls;
         const serverOrigin: string = window["AppUtils"]?.getConfig()?.serverOrigin;
         const cdsHost: string = window["AppUtils"]?.getConfig()?.extensions?.cdsHost as string;
+        // console-chat-bridge (features/admin.copilot.v1's "Chat with an Engineer" escalation)
+        // is a separate origin from serverOrigin, so without this the Asgardeo SDK's
+        // resource-server allow-list rejects it: httpRequest refuses to attach this
+        // session's access token -- or make the request at all -- to any URL not in
+        // resourceServerURLs (SSRF protection against leaking tokens to arbitrary hosts).
+        const consoleChatBridgeBaseUrl: string =
+            window["AppUtils"]?.getConfig()?.extensions?.consoleChatBridgeBaseUrl as string;
 
         if (baseUrls) {
             // If the server origin is not specified in the overridden config, append it.
@@ -124,6 +131,10 @@ export class AuthenticateUtils {
 
         if (cdsHost && !baseUrls.includes(cdsHost)) {
             baseUrls = [ ...baseUrls, cdsHost ];
+        }
+
+        if (consoleChatBridgeBaseUrl && !baseUrls.includes(consoleChatBridgeBaseUrl)) {
+            baseUrls = [ ...baseUrls, consoleChatBridgeBaseUrl ];
         }
 
         return baseUrls;
