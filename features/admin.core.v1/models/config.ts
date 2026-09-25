@@ -962,6 +962,16 @@ export interface ServiceResourceEndpointsInterface extends AgentsResourceEndpoin
 
     CORSOrigins: string;
     copilot: string;
+    /**
+     * console-chat-bridge base URL for the Ask AI "Chat with an Engineer"
+     * escalation POC -- sourced from deployment.config.json's
+     * extensions.consoleChatBridgeBaseUrl (see app.ts), not from
+     * resolveServerHost() like every other endpoint here: this is a
+     * separate, standalone service (apps/console-chat-bridge/backend in
+     * cs-tools), not a WSO2 IS product REST API. Empty string when
+     * unconfigured -- see support-escalation-api.ts's own guard.
+     */
+    supportEscalation: string;
     // TODO: Remove this endpoint and use ID token to get the details
     me: string;
     saml2Meta: string;

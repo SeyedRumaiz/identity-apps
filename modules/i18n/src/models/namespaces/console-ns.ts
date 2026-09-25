@@ -153,6 +153,17 @@ export interface ConsoleNS {
                 requestCancelled: string;
                 timeout: string;
             };
+            escalation: {
+                chatWithEngineer: string;
+                connecting: string;
+                queued: string;
+                connected: string;
+                ended: string;
+                failed: string;
+                unavailable: string;
+                sendFailed: string;
+                engineerLabel: string;
+            };
             status: {
                 submitting: string;
             };

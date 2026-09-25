@@ -20,6 +20,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import HistoryIcon from "@mui/icons-material/History";
 import { Theme, alpha, styled } from "@mui/material/styles";
 import Box from "@oxygen-ui/react/Box";
+import Button from "@oxygen-ui/react/Button";
 import CircularProgress from "@oxygen-ui/react/CircularProgress";
 import IconButton from "@oxygen-ui/react/IconButton";
 import Paper from "@oxygen-ui/react/Paper";
@@ -41,7 +42,7 @@ import {
 } from "./copilot-styles";
 import { CHARS_PER_FRAME, MAX_INPUT_LENGTH, TYPING_SPEED_MS } from "../constants/copilot-chat-constants";
 import useCopilotPanel from "../hooks/use-copilot-panel";
-import { CopilotMessageInterface } from "../store/types/copilot-action-types";
+import { CopilotMessageInterface, EscalationStatus } from "../store/types/copilot-action-types";
 
 const StyledBotMessageBubble: typeof Paper = styled(Paper)(({ theme }: { theme: Theme }) => ({
     "& .markdown": {
@@ -283,6 +284,10 @@ interface ChatMessageProps {
     componentId: string;
     onSendMessage: (msg: string) => void;
     onAnimatedContentChange: () => void;
+    /** Status of the current "Chat with an Engineer" escalation, if any. */
+    escalationStatus: EscalationStatus;
+    /** Escalates this message (an Ask AI error) to a live engineer. */
+    onEscalate: () => void;
 }
 
 
@@ -299,10 +304,13 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
         isLoading: loading,
         componentId,
         onSendMessage,
-        onAnimatedContentChange
+        onAnimatedContentChange,
+        escalationStatus,
+        onEscalate
     }: ChatMessageProps): ReactElement => {
         const { t } = useTranslation();
         const isUser: boolean = message.sender === "user";
+        const isEngineer: boolean = message.sender === "engineer";
         const isError: boolean = message.type === "error";
         const isStreaming: boolean = message.type === "streaming";
 
@@ -428,6 +436,15 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
                 sx={ { mb: 2, px: 2 } }
             >
                 <Box sx={ { maxWidth: "100%", width: "100%" } }>
+                    { isEngineer && (
+                        <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={ { display: "block", mb: 0.5 } }
+                        >
+                            { t("console:common.copilot.escalation.engineerLabel") }
+                        </Typography>
+                    ) }
                     <StyledBotMessageBubble
                         elevation={ 0 }
                         className={ isError ? "error-message" : "" }
@@ -439,6 +456,27 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
                             <Markdown source={ renderedContent } />
                         </MessageErrorBoundary>
                     </StyledBotMessageBubble>
+
+                    { isError && isLastMessage && escalationStatus === EscalationStatus.IDLE && (
+                        <Box sx={ { mt: 1 } }>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={ onEscalate }
+                                data-componentid={ `${componentId}-chat-with-engineer` }
+                            >
+                                { t("console:common.copilot.escalation.chatWithEngineer") }
+                            </Button>
+                        </Box>
+                    ) }
+                    { isError && isLastMessage && escalationStatus === EscalationStatus.ESCALATING && (
+                        <Box sx={ { mt: 1, display: "flex", alignItems: "center", gap: 1 } }>
+                            <CircularProgress size={ 14 } />
+                            <Typography variant="caption" color="text.secondary">
+                                { t("console:common.copilot.escalation.connecting") }
+                            </Typography>
+                        </Box>
+                    ) }
 
                     { !isError && isLastMessage && (
                         <>
@@ -508,7 +546,9 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
         statusMessage,
         hasMoreHistory,
         isLoadingMoreHistory,
-        loadMoreHistory
+        loadMoreHistory,
+        escalationStatus,
+        escalateToEngineer
     } = useCopilotPanel();
 
     const [ inputValue, setInputValue ] = useState<string>("");
@@ -709,6 +749,8 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
                             componentId={ componentId }
                             onSendMessage={ sendMessage }
                             onAnimatedContentChange={ handleAnimatedContentChange }
+                            escalationStatus={ escalationStatus }
+                            onEscalate={ () => escalateToEngineer(message.id) }
                         />
                     ))
                 ) }

@@ -187,6 +187,7 @@ export const commonConfigReducerInitialState: CommonConfigReducerStateInterface<
             serverHost: "",
             serverSupportedSchemas: "",
             smsTemplates: "",
+            supportEscalation: "",
             tenantAssociationApi: "",
             tenantManagementApi: "",
             tenantMoesifAnalytics: "",

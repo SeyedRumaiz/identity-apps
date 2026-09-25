@@ -22,14 +22,24 @@ import {
     CopilotActions,
     CopilotContentType,
     CopilotMessageInterface,
-    CopilotPanelStateInterface
+    CopilotPanelStateInterface,
+    EscalationStateInterface,
+    EscalationStatus
 } from "../types/copilot-action-types";
 
 /**
  * Initial state for the copilot reducer.
  */
+const initialEscalationState: EscalationStateInterface = {
+    caseId: null,
+    engineerEmail: null,
+    status: EscalationStatus.IDLE
+};
+
 const initialState: CopilotPanelStateInterface = {
+    askAiContextId: null,
     contentType: CopilotContentType.CHAT,
+    escalation: initialEscalationState,
     hasMoreHistory: false,
     historyOffset: 0,
     historyTotal: 0,
@@ -100,6 +110,11 @@ export const copilotReducer: Reducer<CopilotPanelStateInterface> = (
         case CopilotActionTypes.CLEAR_COPILOT_CHAT:
             return {
                 ...state,
+                // A cleared chat starts a fresh Ask AI context and drops any
+                // escalation state -- there is nothing left on screen for an
+                // in-progress escalation to attach to.
+                askAiContextId: null,
+                escalation: initialEscalationState,
                 hasMoreHistory: false,
                 historyOffset: 0,
                 historyTotal: 0,
@@ -140,6 +155,19 @@ export const copilotReducer: Reducer<CopilotPanelStateInterface> = (
             return {
                 ...state,
                 isLoadingMoreHistory: action.payload
+            };
+        case CopilotActionTypes.SET_ASK_AI_CONTEXT_ID:
+            return {
+                ...state,
+                askAiContextId: action.payload
+            };
+        case CopilotActionTypes.SET_ESCALATION_STATE:
+            return {
+                ...state,
+                escalation: {
+                    ...state.escalation,
+                    ...action.payload
+                }
             };
         default:
             return state;

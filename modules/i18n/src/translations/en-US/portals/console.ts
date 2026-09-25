@@ -412,6 +412,17 @@ export const console: ConsoleNS = {
                 requestCancelled: "Request was cancelled.",
                 timeout: "The request is taking longer than expected. Please try again."
             },
+            escalation: {
+                chatWithEngineer: "Chat with an Engineer",
+                connecting: "Connecting you to a support engineer...",
+                queued: "You're in the queue. A support engineer will be with you shortly.",
+                connected: "{{engineer}} has joined the chat.",
+                ended: "The support engineer has ended this chat.",
+                failed: "Could not reach a support engineer right now. Please try again in a moment.",
+                unavailable: "Chat with an engineer is not available right now.",
+                sendFailed: "Failed to send your message. Please try again.",
+                engineerLabel: "Support Engineer"
+            },
             status: {
                 submitting: "Submitting your question..."
             },

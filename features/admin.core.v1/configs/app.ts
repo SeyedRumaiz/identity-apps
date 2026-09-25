@@ -417,6 +417,14 @@ export class Config {
             CORSOrigins: `${ this.resolveServerHostFromConfig() }/api/server/v1/cors/origins`,
             asyncStatus: `${ this.resolveServerHost(false, true) }/api/server/v1/async-operations`,
             copilot: `${ this.resolveServerHost() }/api/server/v1/copilot`,
+            // See DeploymentConfigInterface.extensions and this endpoint's
+            // own doc comment in models/config.ts -- not derived from
+            // resolveServerHost() since console-chat-bridge is a separate
+            // standalone service, not a WSO2 IS product REST API. Falls
+            // back to "" (support-escalation-api.ts then treats "Chat with
+            // an Engineer" as unavailable) when unconfigured, so a
+            // deployment that hasn't set this up yet is unaffected.
+            supportEscalation: (this.getDeploymentConfig()?.extensions?.consoleChatBridgeBaseUrl as string) ?? "",
             // TODO: Remove this endpoint and use ID token to get the details
             me: `${ this.getDeploymentConfig()?.serverHost }/scim2/Me`,
             saml2Meta: `${ this.resolveServerHost(false, true) }/identity/metadata/saml2`,

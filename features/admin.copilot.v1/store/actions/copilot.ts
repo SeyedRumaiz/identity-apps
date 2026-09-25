@@ -18,13 +18,23 @@
 
 import { AppState } from "@wso2is/admin.core.v1/store";
 import { I18n } from "@wso2is/i18n";
-import { Dispatch } from "redux";
+import { AnyAction, Dispatch } from "redux";
+import { ThunkDispatch } from "redux-thunk";
 import {
     type CopilotHistoryResponse,
     clearCopilotChatApi,
     getCopilotChatHistory,
     sendCopilotChatMessage
 } from "../../api/copilot-api";
+import {
+    type EngineerChatEventInterface,
+    type EscalationPriorMessageInterface,
+    type SupportEscalationApiError,
+    escalateToEngineer as escalateToEngineerApi,
+    getSupportEscalationBaseUrl,
+    sendEngineerChatMessage as sendEngineerChatMessageApi,
+    streamEngineerChat
+} from "../../api/support-escalation-api";
 
 /**
  * Shape of a single history record returned by the chat history API.
@@ -44,9 +54,13 @@ import {
     SetCopilotChatHistoryActionInterface,
     SetCopilotContentTypeActionInterface,
     SetCopilotHistoryPaginationActionInterface,
+    EscalationStateInterface,
+    EscalationStatus,
+    SetAskAiContextIdActionInterface,
     SetCopilotPanelLoadingActionInterface,
     SetCopilotPanelVisibilityActionInterface,
     SetCopilotStatusMessageActionInterface,
+    SetEscalationStateActionInterface,
     SetIsLoadingMoreHistoryActionInterface,
     ToggleCopilotPanelActionInterface,
     UpdateCopilotMessageActionInterface
@@ -787,6 +801,267 @@ export const sendCopilotMessage = (userMessage: string) => {
             requestManager.completeRequest("chat", controller);
             dispatch(setCopilotPanelLoading(false));
             dispatch(setCopilotStatusMessage(null));
+        }
+    };
+};
+
+/**
+ * Redux action to set Ask AI's stable per-panel-session context id.
+ *
+ * @param contextId - The generated context id.
+ * @returns An action of type `SET_ASK_AI_CONTEXT_ID`.
+ */
+const setAskAiContextId = (contextId: string): SetAskAiContextIdActionInterface => ({
+    payload: contextId,
+    type: CopilotActionTypes.SET_ASK_AI_CONTEXT_ID
+});
+
+/**
+ * Redux action to merge a partial update into the current escalation state.
+ *
+ * @param update - Partial escalation state to merge.
+ * @returns An action of type `SET_ESCALATION_STATE`.
+ */
+const setEscalationState = (
+    update: Partial<EscalationStateInterface>
+): SetEscalationStateActionInterface => ({
+    payload: update,
+    type: CopilotActionTypes.SET_ESCALATION_STATE
+});
+
+/**
+ * Reads (or, on first use, generates and persists) Ask AI's stable
+ * per-panel-session context id -- sent to console-chat-bridge as an
+ * escalation's conversationId. NEVER the same value as the caseId an
+ * escalation mints (see EscalationStateInterface's own doc comment).
+ */
+const ensureAskAiContextId = (
+    dispatch: Dispatch, getState: () => AppState
+): string => {
+    const existing: string | null = getState()?.copilot?.askAiContextId ?? null;
+
+    if (existing) {
+        return existing;
+    }
+
+    const contextId: string = crypto.randomUUID();
+
+    dispatch(setAskAiContextId(contextId));
+
+    return contextId;
+};
+
+/**
+ * Redux thunk to subscribe to console-chat-bridge's per-case SSE stream and
+ * translate its events into copilot state updates / chat messages. Started
+ * by escalateToEngineer once a caseId exists; runs until the stream ends
+ * (engineer disconnected/converted-to-case) or errors.
+ *
+ * @param caseId - The escalation's caseId.
+ * @returns A thunk function.
+ */
+const startEngineerChatStream = (caseId: string) => {
+    return async (dispatch: Dispatch): Promise<void> => {
+        const controller: AbortController = requestManager.startRequest("engineerStream");
+
+        try {
+            await streamEngineerChat(caseId, {
+                onError: () => {
+                    dispatch(setEscalationState({ status: EscalationStatus.ERROR }));
+                },
+                onEvent: (event: EngineerChatEventInterface) => {
+                    switch (event.type) {
+                        case "queued":
+                            if (event.message) {
+                                dispatch(addCopilotMessage({
+                                    content: event.message,
+                                    id: `engineer-queued-${Date.now()}`,
+                                    sender: "copilot",
+                                    timestamp: Date.now(),
+                                    type: "text"
+                                }));
+                            }
+
+                            break;
+                        case "engineer_assigned":
+                            dispatch(setEscalationState({
+                                engineerEmail: event.engineerEmail ?? null,
+                                status: EscalationStatus.CONNECTED
+                            }));
+                            dispatch(addCopilotMessage({
+                                content: I18n.instance.t("console:common.copilot.escalation.connected", {
+                                    engineer: event.engineerEmail || "a support engineer"
+                                }),
+                                id: `engineer-connected-${Date.now()}`,
+                                sender: "engineer",
+                                timestamp: Date.now(),
+                                type: "text"
+                            }));
+
+                            break;
+                        case "engineer_message":
+                            if (event.message) {
+                                dispatch(addCopilotMessage({
+                                    content: event.message,
+                                    id: `engineer-msg-${Date.now()}`,
+                                    sender: "engineer",
+                                    timestamp: Date.now(),
+                                    type: "text"
+                                }));
+                            }
+
+                            break;
+                        case "engineer_disconnected":
+                        case "converted_to_case":
+                            dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
+                            dispatch(addCopilotMessage({
+                                content: I18n.instance.t("console:common.copilot.escalation.ended"),
+                                id: `engineer-ended-${Date.now()}`,
+                                sender: "copilot",
+                                timestamp: Date.now(),
+                                type: "text"
+                            }));
+
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }, controller.signal);
+        } catch (_error: unknown) {
+            if (!controller.signal.aborted) {
+                dispatch(setEscalationState({ status: EscalationStatus.ERROR }));
+            }
+        } finally {
+            requestManager.completeRequest("engineerStream", controller);
+        }
+    };
+};
+
+/**
+ * Redux thunk to escalate an Ask AI error to a live engineer via
+ * console-chat-bridge (see that service's own README). errorMessageId is
+ * the CopilotMessageInterface.id of the error bubble the
+ * "Chat with an Engineer" button was shown under -- used to pull the error
+ * text and the question that preceded it as context for the engineer.
+ * No-ops (with an inline error message) if this deployment hasn't
+ * configured console-chat-bridge (see getSupportEscalationBaseUrl).
+ *
+ * @param errorMessageId - The id of the error message being escalated.
+ * @returns A thunk function.
+ */
+/**
+ * Thunk-aware dispatch type, needed because escalateToEngineer dispatches
+ * another thunk (startEngineerChatStream) rather than a plain action.
+ */
+type AppDispatch = ThunkDispatch<AppState, unknown, AnyAction>;
+
+export const escalateToEngineer = (errorMessageId: string) => {
+    return async (dispatch: AppDispatch, getState: () => AppState): Promise<void> => {
+        if (!getSupportEscalationBaseUrl()) {
+            dispatch(addCopilotMessage({
+                content: I18n.instance.t("console:common.copilot.escalation.unavailable"),
+                id: `escalation-unavailable-${Date.now()}`,
+                sender: "copilot",
+                timestamp: Date.now(),
+                type: "error"
+            }));
+
+            return;
+        }
+
+        const messages: CopilotMessageInterface[] = getState()?.copilot?.messages ?? [];
+        const errorIndex: number = messages.findIndex(
+            (message: CopilotMessageInterface) => message.id === errorMessageId
+        );
+        const errorMessage: CopilotMessageInterface | undefined = messages[errorIndex];
+        const lastUserMessage: CopilotMessageInterface | undefined = messages
+            .slice(0, errorIndex < 0 ? messages.length : errorIndex)
+            .reverse()
+            .find((message: CopilotMessageInterface) => message.sender === "user");
+
+        const askAiContextId: string = ensureAskAiContextId(dispatch, getState);
+
+        dispatch(setEscalationState({ status: EscalationStatus.ESCALATING }));
+
+        const priorMessages: EscalationPriorMessageInterface[] = messages
+            .filter((message: CopilotMessageInterface) => message.sender === "user" || message.sender === "copilot")
+            .slice(-10)
+            .map((message: CopilotMessageInterface): EscalationPriorMessageInterface => ({
+                content: message.content,
+                createdAt: new Date(message.timestamp).toISOString(),
+                role: message.sender === "user" ? "customer" : "assistant"
+            }));
+
+        try {
+            const result: { caseId: string } = await escalateToEngineerApi({
+                askAiContextId,
+                errorContext: errorMessage?.content,
+                priorMessages,
+                question: lastUserMessage?.content ?? "Ask AI ran into an error."
+            });
+
+            dispatch(setEscalationState({ caseId: result.caseId, status: EscalationStatus.QUEUED }));
+            dispatch(addCopilotMessage({
+                content: I18n.instance.t("console:common.copilot.escalation.queued"),
+                id: `escalation-queued-${Date.now()}`,
+                sender: "copilot",
+                timestamp: Date.now(),
+                type: "text"
+            }));
+
+            dispatch(startEngineerChatStream(result.caseId));
+        } catch (error: unknown) {
+            dispatch(setEscalationState({ status: EscalationStatus.ERROR }));
+
+            const apiError: SupportEscalationApiError = error as SupportEscalationApiError;
+
+            dispatch(addCopilotMessage({
+                content: apiError?.status === 409
+                    ? apiError.message
+                    : I18n.instance.t("console:common.copilot.escalation.failed"),
+                id: `escalation-error-${Date.now()}`,
+                sender: "copilot",
+                timestamp: Date.now(),
+                type: "error"
+            }));
+        }
+    };
+};
+
+/**
+ * Redux thunk to send one message on an already-connected engineer chat.
+ * No-ops if no escalation is currently connected.
+ *
+ * @param message - The message text.
+ * @returns A thunk function.
+ */
+export const sendEngineerMessage = (message: string) => {
+    return async (dispatch: Dispatch, getState: () => AppState): Promise<void> => {
+        const caseId: string | null = getState()?.copilot?.escalation?.caseId ?? null;
+
+        if (!caseId || !message.trim()) {
+            return;
+        }
+
+        dispatch(addCopilotMessage({
+            content: message.trim(),
+            id: `user-${Date.now()}`,
+            sender: "user",
+            timestamp: Date.now(),
+            type: "text"
+        }));
+
+        try {
+            await sendEngineerChatMessageApi(caseId, message.trim());
+        } catch (_error: unknown) {
+            dispatch(addCopilotMessage({
+                content: I18n.instance.t("console:common.copilot.escalation.sendFailed"),
+                id: `engineer-send-error-${Date.now()}`,
+                sender: "copilot",
+                timestamp: Date.now(),
+                type: "error"
+            }));
         }
     };
 };

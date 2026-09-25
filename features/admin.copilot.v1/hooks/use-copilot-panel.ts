@@ -24,9 +24,11 @@ import { ThunkDispatch } from "redux-thunk";
 import {
     addCopilotMessage,
     clearCopilotChatWithApi,
+    escalateToEngineer,
     fetchCopilotHistory,
     loadMoreCopilotHistory,
     sendCopilotMessage,
+    sendEngineerMessage,
     setCopilotContentType,
     setCopilotPanelLoading,
     setCopilotPanelVisibility,
@@ -35,7 +37,8 @@ import {
 import {
     CopilotContentType,
     CopilotMessageInterface,
-    CopilotPanelStateInterface
+    CopilotPanelStateInterface,
+    EscalationStatus
 } from "../store/types/copilot-action-types";
 
 type AppDispatch = ThunkDispatch<AppState, unknown, AnyAction>;
@@ -113,6 +116,14 @@ interface UseCopilotPanelInterface {
      * The current status message (agent step progress), or null.
      */
     statusMessage: string | null;
+    /**
+     * Status of the current "Chat with an Engineer" escalation, if any.
+     */
+    escalationStatus: EscalationStatus;
+    /**
+     * Function to escalate an Ask AI error (by that error message's id) to a live engineer.
+     */
+    escalateToEngineer: (errorMessageId: string) => void;
 }
 
 /**
@@ -138,12 +149,29 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
     }, [ dispatch ]);
 
     /**
-     * Send a message to the copilot.
-     * Token handling is done automatically by AsgardeoSPAClient.
+     * Send a message. Routes to the connected engineer once an escalation
+     * has been accepted (copilotState.escalation.status === CONNECTED),
+     * otherwise goes to Ask AI as before -- callers (copilot-chat.tsx) do
+     * not need to know which is currently active.
+     * Token handling is done automatically by AsgardeoSPAClient in either
+     * case.
      */
     const sendMessage: (message: string) => void = useCallback((message: string) => {
-        dispatch(sendCopilotMessage(message));
-    }, [ dispatch ]);
+        if (copilotState?.escalation?.status === EscalationStatus.CONNECTED) {
+            dispatch(sendEngineerMessage(message));
+        } else {
+            dispatch(sendCopilotMessage(message));
+        }
+    }, [ dispatch, copilotState?.escalation?.status ]);
+
+    /**
+     * Escalate an Ask AI error to a live engineer.
+     */
+    const escalateToEngineerCallback: (errorMessageId: string) => void = useCallback(
+        (errorMessageId: string) => {
+            dispatch(escalateToEngineer(errorMessageId));
+        }, [ dispatch ]
+    );
 
     const addMessage: (message: CopilotMessageInterface) => void = useCallback((message: CopilotMessageInterface) => {
         dispatch(addCopilotMessage(message));
@@ -177,6 +205,8 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         addMessage,
         clearChat,
         contentType: copilotState?.contentType ?? CopilotContentType.CHAT,
+        escalateToEngineer: escalateToEngineerCallback,
+        escalationStatus: copilotState?.escalation?.status ?? EscalationStatus.IDLE,
         hasMoreHistory: copilotState?.hasMoreHistory ?? false,
         hidePanel,
         isLoading: copilotState?.isLoading ?? false,
