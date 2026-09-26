@@ -3843,6 +3843,9 @@ importers:
       '@oxygen-ui/react':
         specifier: ^2.4.5
         version: 2.4.6(43a10c969c8ffe9f55ba3c36a34c927d)
+      '@wso2/live-chat-client':
+        specifier: file:./vendor/wso2-live-chat-client-0.1.0.tgz
+        version: file:features/admin.copilot.v1/vendor/wso2-live-chat-client-0.1.0.tgz
       '@wso2is/admin.core.v1':
         specifier: workspace:^
         version: link:../admin.core.v1
@@ -16270,6 +16273,11 @@ packages:
     peerDependenciesMeta:
       webpack-dev-server:
         optional: true
+
+  '@wso2/live-chat-client@file:features/admin.copilot.v1/vendor/wso2-live-chat-client-0.1.0.tgz':
+    resolution: {integrity: sha512-PLTCagH2yFwzi3KMekfpH03jKPG0gfETp6oRw+PgqenBaBDlTq5H0CGOLtHqlvMqryXBxp+znceKl06ExahAUw==, tarball: file:features/admin.copilot.v1/vendor/wso2-live-chat-client-0.1.0.tgz}
+    version: 0.1.0
+    engines: {node: '>=18.0.0'}
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -28766,6 +28774,8 @@ snapshots:
     dependencies:
       webpack: 5.101.3(@swc/core@1.5.7(@swc/helpers@0.5.21))(esbuild@0.25.12)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.101.3)
+
+  '@wso2/live-chat-client@file:features/admin.copilot.v1/vendor/wso2-live-chat-client-0.1.0.tgz': {}
 
   '@xtuc/ieee754@1.2.0': {}
 
