@@ -117,8 +117,20 @@ export class AuthenticateUtils {
         // resource-server allow-list rejects it: httpRequest refuses to attach this
         // session's access token -- or make the request at all -- to any URL not in
         // resourceServerURLs (SSRF protection against leaking tokens to arbitrary hosts).
-        const consoleChatBridgeBaseUrl: string =
+        //
+        // A path-only configured value (this deployment's own same-origin vite dev-proxy
+        // route, e.g. "/console-chat-bridge" -- see vite.config.ts's own doc comment on
+        // why that proxy exists) must be resolved to an absolute URL here, identically to
+        // how features/admin.copilot.v1/api/live-chat-client.ts's own
+        // getSupportEscalationBaseUrl resolves it before making the actual request --
+        // resourceServerURLs is matched against the real request URL, so an unresolved
+        // relative entry here would never match and every call would be rejected.
+        const configuredConsoleChatBridgeBaseUrl: string =
             window["AppUtils"]?.getConfig()?.extensions?.consoleChatBridgeBaseUrl as string;
+        const consoleChatBridgeBaseUrl: string =
+            configuredConsoleChatBridgeBaseUrl && configuredConsoleChatBridgeBaseUrl.startsWith("/")
+                ? `${window.location.origin}${configuredConsoleChatBridgeBaseUrl}`
+                : configuredConsoleChatBridgeBaseUrl;
 
         if (baseUrls) {
             // If the server origin is not specified in the overridden config, append it.
