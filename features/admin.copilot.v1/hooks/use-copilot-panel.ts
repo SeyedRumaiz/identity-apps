@@ -121,6 +121,12 @@ interface UseCopilotPanelInterface {
      */
     escalationStatus: EscalationStatus;
     /**
+     * The connected engineer's email for the current escalation, or null
+     * before one has joined -- set once, on the "assigned" event (see
+     * store/actions/copilot.ts).
+     */
+    engineerEmail: string | null;
+    /**
      * Function to escalate an Ask AI error (by that error message's id) to a live engineer.
      */
     escalateToEngineer: (errorMessageId: string) => void;
@@ -205,6 +211,7 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         addMessage,
         clearChat,
         contentType: copilotState?.contentType ?? CopilotContentType.CHAT,
+        engineerEmail: copilotState?.escalation?.engineerEmail ?? null,
         escalateToEngineer: escalateToEngineerCallback,
         escalationStatus: copilotState?.escalation?.status ?? EscalationStatus.IDLE,
         hasMoreHistory: copilotState?.hasMoreHistory ?? false,

@@ -286,6 +286,8 @@ interface ChatMessageProps {
     onAnimatedContentChange: () => void;
     /** Status of the current "Chat with an Engineer" escalation, if any. */
     escalationStatus: EscalationStatus;
+    /** The connected engineer's email, or null before one has joined. */
+    engineerEmail: string | null;
     /** Escalates this message (an Ask AI error) to a live engineer. */
     onEscalate: () => void;
 }
@@ -306,6 +308,7 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
         onSendMessage,
         onAnimatedContentChange,
         escalationStatus,
+        engineerEmail,
         onEscalate
     }: ChatMessageProps): ReactElement => {
         const { t } = useTranslation();
@@ -442,7 +445,7 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
                             color="text.secondary"
                             sx={ { display: "block", mb: 0.5 } }
                         >
-                            { t("console:common.copilot.escalation.engineerLabel") }
+                            { engineerEmail ?? t("console:common.copilot.escalation.engineerLabel") }
                         </Typography>
                     ) }
                     <StyledBotMessageBubble
@@ -548,6 +551,7 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
         isLoadingMoreHistory,
         loadMoreHistory,
         escalationStatus,
+        engineerEmail,
         escalateToEngineer
     } = useCopilotPanel();
 
@@ -750,6 +754,7 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
                             onSendMessage={ sendMessage }
                             onAnimatedContentChange={ handleAnimatedContentChange }
                             escalationStatus={ escalationStatus }
+                            engineerEmail={ engineerEmail }
                             onEscalate={ () => escalateToEngineer(message.id) }
                         />
                     ))
