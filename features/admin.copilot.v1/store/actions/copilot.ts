@@ -953,11 +953,27 @@ const startEngineerChatStream = (caseId: string) => {
 
                     break;
                 case "disconnected":
+                    dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
+                    dispatch(addCopilotMessage({
+                        content: I18n.instance.t("console:common.copilot.escalation.ended", {
+                            engineer: event.engineerEmail
+                        }),
+                        id: `engineer-ended-${Date.now()}`,
+                        sender: "copilot",
+                        timestamp: Date.now(),
+                        type: "text"
+                    }));
+                    endStream();
+
+                    break;
                 case "converted":
                     dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
                     dispatch(addCopilotMessage({
-                        content: I18n.instance.t("console:common.copilot.escalation.ended"),
-                        id: `engineer-ended-${Date.now()}`,
+                        content: I18n.instance.t("console:common.copilot.escalation.convertedToCase", {
+                            caseId: event.entityCaseId,
+                            engineer: event.engineerEmail
+                        }),
+                        id: `engineer-converted-${Date.now()}`,
                         sender: "copilot",
                         timestamp: Date.now(),
                         type: "text"

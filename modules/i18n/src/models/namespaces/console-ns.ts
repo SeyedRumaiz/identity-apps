@@ -159,6 +159,7 @@ export interface ConsoleNS {
                 queued: string;
                 connected: string;
                 ended: string;
+                convertedToCase: string;
                 failed: string;
                 unavailable: string;
                 sendFailed: string;
