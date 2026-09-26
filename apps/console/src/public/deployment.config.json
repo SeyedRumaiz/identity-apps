@@ -41,6 +41,7 @@
                 "termsOfServiceUrl": ""
             }
         },
+        "consoleChatBridgeBaseUrl": "/console-chat-bridge",
         "cdsApplicationIdentifierType": "client_id",
         "cdsHost": "",
         "cdsUnifiedProfileView": false,
@@ -270,7 +271,7 @@
             "openid",
             "profile"
         ],
-        "serverOrigin": "https://localhost:9443",
+        "serverOrigin": "https://localhost:9444",
         "storage": "webWorker"
     },
     "loginCallbackPath": "",
@@ -281,7 +282,7 @@
         "login": "",
         "logout": "/logout"
     },
-    "serverOrigin": "https://localhost:9443",
+    "serverOrigin": "https://localhost:9444",
     "session": {
         "checkSessionInterval": 3.0,
         "sessionRefreshTimeOut": 300.0,
@@ -994,7 +995,7 @@
             },
             "copilot": {
                 "disabledFeatures": [],
-                "enabled": false,
+                "enabled": true,
                 "featureFlags": [],
                 "scopes": {
                     "create": [],
