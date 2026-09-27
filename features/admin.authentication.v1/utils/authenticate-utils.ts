@@ -112,19 +112,11 @@ export class AuthenticateUtils {
         let baseUrls: string[] = window["AppUtils"]?.getConfig()?.idpConfigs?.baseUrls;
         const serverOrigin: string = window["AppUtils"]?.getConfig()?.serverOrigin;
         const cdsHost: string = window["AppUtils"]?.getConfig()?.extensions?.cdsHost as string;
-        // console-chat-bridge (features/admin.copilot.v1's "Chat with an Engineer" escalation)
-        // is a separate origin from serverOrigin, so without this the Asgardeo SDK's
-        // resource-server allow-list rejects it: httpRequest refuses to attach this
-        // session's access token -- or make the request at all -- to any URL not in
-        // resourceServerURLs (SSRF protection against leaking tokens to arbitrary hosts).
-        //
-        // A path-only configured value (this deployment's own same-origin vite dev-proxy
-        // route, e.g. "/console-chat-bridge" -- see vite.config.ts's own doc comment on
-        // why that proxy exists) must be resolved to an absolute URL here, identically to
-        // how features/admin.copilot.v1/api/live-chat-client.ts's own
-        // getSupportEscalationBaseUrl resolves it before making the actual request --
-        // resourceServerURLs is matched against the real request URL, so an unresolved
-        // relative entry here would never match and every call would be rejected.
+        // console-chat-bridge is a separate origin from serverOrigin, so without this
+        // the Asgardeo SDK's resource-server allow-list rejects every request to it.
+        // A path-only configured value must be resolved to an absolute URL first
+        // (matching live-chat-client.ts's own resolution), since the allow-list is
+        // matched against the real request URL, not the configured one.
         const configuredConsoleChatBridgeBaseUrl: string =
             window["AppUtils"]?.getConfig()?.extensions?.consoleChatBridgeBaseUrl as string;
         const consoleChatBridgeBaseUrl: string =

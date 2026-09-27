@@ -659,17 +659,13 @@ export default defineConfig(({ mode }: { mode: string }) => {
             https: true,
             open: buildMode.publicBase,
             proxy: {
-                // console-chat-bridge (cs-tools/apps/console-chat-bridge) has no
-                // local TLS listener -- it only serves plain HTTP. This dev
-                // server runs over HTTPS (see `https: true` above), so the
-                // browser calling http://localhost:8090 directly is a mixed-
-                // content request Chrome blocks client-side before any
-                // connection is attempted. Proxying it through this same-origin
-                // HTTPS path keeps the browser-to-devserver leg on HTTPS; the
-                // devserver-to-bridge leg (server-to-server, not subject to
-                // mixed-content rules) stays plain HTTP. See
-                // deployment.config.json's consoleChatBridgeBaseUrl, which
-                // points at this same path.
+                // console-chat-bridge has no local TLS listener (plain HTTP
+                // only). This dev server runs over HTTPS, so calling it
+                // directly is a mixed-content request browsers block
+                // client-side. Proxying through this same-origin path keeps
+                // the browser-facing leg on HTTPS; server-to-server isn't
+                // subject to mixed-content rules. deployment.config.json's
+                // consoleChatBridgeBaseUrl points at this same path.
                 "/console-chat-bridge": {
                     changeOrigin: true,
                     rewrite: (path: string): string => path.replace(/^\/console-chat-bridge/, ""),
