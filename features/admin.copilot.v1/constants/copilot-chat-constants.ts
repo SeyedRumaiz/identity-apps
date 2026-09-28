@@ -19,3 +19,5 @@
 export const TYPING_SPEED_MS: number = 16;
 export const CHARS_PER_FRAME: number = 3;
 export const MAX_INPUT_LENGTH: number = 256;
+/** Consecutive Ask AI errors required before offering "Chat with an Engineer". */
+export const MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION: number = 3;

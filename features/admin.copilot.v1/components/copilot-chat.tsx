@@ -30,7 +30,7 @@ import Typography from "@oxygen-ui/react/Typography";
 import { IdentifiableComponentInterface } from "@wso2is/core/models";
 import { DocumentationLink, Markdown, useDocumentation } from "@wso2is/react-components";
 import React, {
-    Component, ReactElement, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState
+    Component, ReactElement, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState
 } from "react";
 import { useTranslation } from "react-i18next";
 import AISparkleIcon from "./ai-sparkle-icon";
@@ -40,7 +40,12 @@ import {
     StyledLoadMoreButton,
     StyledSuggestionButton
 } from "./copilot-styles";
-import { CHARS_PER_FRAME, MAX_INPUT_LENGTH, TYPING_SPEED_MS } from "../constants/copilot-chat-constants";
+import {
+    CHARS_PER_FRAME,
+    MAX_INPUT_LENGTH,
+    MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION,
+    TYPING_SPEED_MS
+} from "../constants/copilot-chat-constants";
 import useCopilotPanel from "../hooks/use-copilot-panel";
 import { CopilotMessageInterface, EscalationStatus } from "../store/types/copilot-action-types";
 
@@ -290,6 +295,12 @@ interface ChatMessageProps {
     engineerEmail: string | null;
     /** Escalates this message (an Ask AI error) to a live engineer. */
     onEscalate: () => void;
+    /**
+     * True once at least MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION Ask AI
+     * attempts in a row have failed -- "Chat with an Engineer" is only
+     * offered on this message once this is true, not on the first error.
+     */
+    canEscalate: boolean;
 }
 
 
@@ -309,7 +320,8 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
         onAnimatedContentChange,
         escalationStatus,
         engineerEmail,
-        onEscalate
+        onEscalate,
+        canEscalate
     }: ChatMessageProps): ReactElement => {
         const { t } = useTranslation();
         const isUser: boolean = message.sender === "user";
@@ -460,7 +472,7 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
                         </MessageErrorBoundary>
                     </StyledBotMessageBubble>
 
-                    { isError && isLastMessage && escalationStatus === EscalationStatus.IDLE && (
+                    { isError && isLastMessage && canEscalate && escalationStatus === EscalationStatus.IDLE && (
                         <Box sx={ { mt: 1 } }>
                             <Button
                                 variant="outlined"
@@ -554,6 +566,32 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
         engineerEmail,
         escalateToEngineer
     } = useCopilotPanel();
+
+    /**
+     * How many Ask AI attempts in a row have ended in an error, counting
+     * back from the most recent message and skipping over the user's own
+     * messages (a user message never breaks the streak; a non-error bot
+     * reply does). "Chat with an Engineer" is offered only once this
+     * reaches MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION -- not on the very
+     * first error.
+     */
+    const canEscalate: boolean = useMemo((): boolean => {
+        let consecutiveErrors: number = 0;
+
+        for (let i: number = messages.length - 1; i >= 0; i--) {
+            const message: CopilotMessageInterface = messages[i];
+
+            if (message.sender === "user") {
+                continue;
+            }
+            if (message.type !== "error") {
+                break;
+            }
+            consecutiveErrors++;
+        }
+
+        return consecutiveErrors >= MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION;
+    }, [ messages ]);
 
     const [ inputValue, setInputValue ] = useState<string>("");
     const messagesEndRef: React.RefObject<HTMLDivElement> = useRef<HTMLDivElement>(null);
@@ -756,6 +794,7 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
                             escalationStatus={ escalationStatus }
                             engineerEmail={ engineerEmail }
                             onEscalate={ () => escalateToEngineer(message.id) }
+                            canEscalate={ canEscalate }
                         />
                     ))
                 ) }
