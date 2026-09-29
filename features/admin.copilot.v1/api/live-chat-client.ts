@@ -151,6 +151,8 @@ let cachedForBaseUrl: string | null = null;
  * A LiveChatClient bound to this deployment's console-chat-bridge base URL
  * and the fixed identity-console tenant, or null if unconfigured.
  * Memoized per base URL to avoid rebuilding on every call.
+ * Hands back an SDK client pre-wired with requestTransport/streamTransport
+ * built on AsgardeoSPAClient.
  */
 export const getLiveChatClient = (): LiveChatClient | null => {
     const baseUrl: string = getSupportEscalationBaseUrl();

@@ -74,7 +74,8 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
         messages,
         isLoading,
         hidePanel,
-        loadHistory
+        loadHistory,
+        resumeEngineerChat
     } = useCopilotPanel();
 
     /**
@@ -85,6 +86,19 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
             loadHistory();
         }
     }, [ isVisible, isAuthenticated, loadHistory ]);
+
+    /**
+     * Resume an engineer-chat escalation that survived a page refresh --
+     * see resumeEngineerChatIfNeeded's own doc comment for why restoring
+     * the Redux state alone (the reducer's sessionStorage mirror) isn't
+     * enough on its own. Safe to run on every panel-open, not just the
+     * first one after a refresh: it no-ops once a stream is already active.
+     */
+    useEffect(() => {
+        if (isVisible && isAuthenticated) {
+            resumeEngineerChat();
+        }
+    }, [ isVisible, isAuthenticated, resumeEngineerChat ]);
 
     /**
      * The panel is toggled via isVisible rather than unmounted/remounted

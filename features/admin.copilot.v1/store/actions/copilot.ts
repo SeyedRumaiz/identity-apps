@@ -42,14 +42,14 @@ import {
     CopilotActionTypes,
     CopilotContentType,
     CopilotMessageInterface,
+    EscalationStateInterface,
+    EscalationStatus,
     HistoryPaginationPayloadInterface,
     PrependCopilotMessagesActionInterface,
+    SetAskAiContextIdActionInterface,
     SetCopilotChatHistoryActionInterface,
     SetCopilotContentTypeActionInterface,
     SetCopilotHistoryPaginationActionInterface,
-    EscalationStateInterface,
-    EscalationStatus,
-    SetAskAiContextIdActionInterface,
     SetCopilotPanelLoadingActionInterface,
     SetCopilotPanelVisibilityActionInterface,
     SetCopilotStatusMessageActionInterface,
@@ -887,6 +887,26 @@ const ensureAskAiContextId = (
  * @param caseId - The escalation's caseId.
  * @returns A thunk function.
  */
+/** Base delay before the first reconnect attempt after the stream drops. */
+const ENGINEER_STREAM_RECONNECT_BASE_DELAY_MS: number = 3_000;
+/** Reconnect delay never grows past this, no matter how many consecutive drops. */
+const ENGINEER_STREAM_RECONNECT_MAX_DELAY_MS: number = 30_000;
+
+/**
+ * Exponential backoff with full jitter -- see csm-portal/webapp's own
+ * useChatAlertsStream.ts for the twin of this on the engineer side (kept
+ * duplicated rather than shared across repos for the same reason that
+ * file's own doc comment gives).
+ */
+const engineerStreamReconnectDelay = (attempt: number): number => {
+    const capped: number = Math.min(
+        ENGINEER_STREAM_RECONNECT_MAX_DELAY_MS,
+        ENGINEER_STREAM_RECONNECT_BASE_DELAY_MS * 2 ** attempt
+    );
+
+    return Math.random() * capped;
+};
+
 const startEngineerChatStream = (caseId: string) => {
     return (dispatch: Dispatch): void => {
         const client: LiveChatClient | null = getLiveChatClient();
@@ -899,122 +919,167 @@ const startEngineerChatStream = (caseId: string) => {
 
         const controller: AbortController = requestManager.startRequest("engineerStream");
 
-        // Assigned immediately below -- declared as a mutable binding only
-        // so endStream (used inside the onEvent callback, which can only
-        // ever run after subscribe() has returned and assigned this) can
-        // reference it without a temporal-dead-zone hazard.
+        // Assigned by connect() below -- declared as a mutable binding only
+        // so endStream/teardown (used inside the onEvent callback, which can
+        // only ever run after subscribe() has returned and assigned this)
+        // can reference it without a temporal-dead-zone hazard.
         let unsubscribe: () => void = () => undefined;
+        let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+        let reconnectAttempt: number = 0;
 
-        /** Tears this stream down exactly once: stops tracking it as an
-         * abortable request and releases the underlying connection. Safe
-         * to call from within the onEvent callback itself. */
+        /** Tears this stream down exactly once, for good: stops tracking it
+         * as an abortable request, cancels any pending reconnect, and
+         * releases the underlying connection. Safe to call from within the
+         * onEvent callback itself. Use this (not just unsubscribe()) for
+         * every terminal outcome -- disconnected/converted/expired -- so a
+         * stale reconnect timer can never fire after the chat is genuinely
+         * over. */
         const endStream = (): void => {
             requestManager.completeRequest("engineerStream", controller);
-            controller.signal.removeEventListener("abort", unsubscribe);
+            controller.signal.removeEventListener("abort", teardown);
+            clearTimeout(reconnectTimer);
             unsubscribe();
         };
 
-        unsubscribe = client.subscribe(caseId, (event: LiveChatEvent) => {
-            switch (event.type) {
-                case "queued":
-                    dispatch(addCopilotMessage({
-                        content: event.message,
-                        id: `engineer-queued-${Date.now()}`,
-                        sender: "copilot",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
+        /** Cancellation-only teardown, wired to the shared AbortController
+         * (a fresh escalation, clearCopilotChatWithApi, or unmount) --
+         * unlike endStream, does not touch requestManager itself, since the
+         * controller's own owner already does that. */
+        const teardown = (): void => {
+            clearTimeout(reconnectTimer);
+            unsubscribe();
+        };
 
-                    break;
-                case "assigned":
-                    dispatch(setEscalationState({
-                        engineerEmail: event.engineerEmail,
-                        status: EscalationStatus.CONNECTED
-                    }));
-                    dispatch(addCopilotMessage({
-                        content: I18n.instance.t("console:common.copilot.escalation.connected", {
-                            engineer: event.engineerEmail
-                        }),
-                        id: `engineer-connected-${Date.now()}`,
-                        sender: "engineer",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
+        const scheduleReconnect = (): void => {
+            if (controller.signal.aborted) return;
 
-                    break;
-                case "message":
-                    dispatch(addCopilotMessage({
-                        content: event.content,
-                        id: `engineer-msg-${Date.now()}`,
-                        sender: "engineer",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
+            const delay: number = engineerStreamReconnectDelay(reconnectAttempt);
 
-                    break;
-                case "disconnected":
-                    dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
-                    dispatch(addCopilotMessage({
-                        content: I18n.instance.t("console:common.copilot.escalation.ended", {
-                            engineer: event.engineerEmail
-                        }),
-                        id: `engineer-ended-${Date.now()}`,
-                        sender: "copilot",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
-                    endStream();
+            reconnectAttempt += 1;
+            reconnectTimer = setTimeout(connect, delay);
+        };
 
-                    break;
-                case "converted":
-                    dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
-                    dispatch(addCopilotMessage({
-                        content: I18n.instance.t("console:common.copilot.escalation.convertedToCase", {
-                            caseId: event.entityCaseId,
-                            engineer: event.engineerEmail
-                        }),
-                        id: `engineer-converted-${Date.now()}`,
-                        sender: "copilot",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
-                    endStream();
+        const connect = (): void => {
+            unsubscribe = client.subscribe(caseId, (event: LiveChatEvent) => {
+                // Any real event proves the connection is genuinely alive
+                // again -- reset backoff so a later drop starts fresh
+                // rather than inheriting a long delay from an earlier,
+                // unrelated outage.
+                reconnectAttempt = 0;
 
-                    break;
-                case "expired":
-                    // Nobody was ever connected -- unlike "disconnected"/
-                    // "converted" (an engineer was here, however briefly),
-                    // the queue simply gave up waiting. Back to IDLE, not
-                    // ENDED, so "Chat with an Engineer" is immediately
-                    // offered again instead of reading as a session that
-                    // happened and finished; the stale caseId/engineerEmail
-                    // are cleared for the same reason.
-                    dispatch(setEscalationState({
-                        caseId: null,
-                        engineerEmail: null,
-                        status: EscalationStatus.IDLE
-                    }));
-                    dispatch(addCopilotMessage({
-                        content: event.message,
-                        id: `engineer-expired-${Date.now()}`,
-                        sender: "copilot",
-                        timestamp: Date.now(),
-                        type: "text"
-                    }));
-                    endStream();
+                switch (event.type) {
+                    case "queued":
+                        dispatch(addCopilotMessage({
+                            content: event.message,
+                            id: `engineer-queued-${Date.now()}`,
+                            sender: "copilot",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
 
-                    break;
-                case "error":
-                    dispatch(setEscalationState({ status: EscalationStatus.ERROR }));
-                    endStream();
+                        break;
+                    case "assigned":
+                        dispatch(setEscalationState({
+                            engineerEmail: event.engineerEmail,
+                            status: EscalationStatus.CONNECTED
+                        }));
+                        dispatch(addCopilotMessage({
+                            content: I18n.instance.t("console:common.copilot.escalation.connected", {
+                                engineer: event.engineerEmail
+                            }),
+                            id: `engineer-connected-${Date.now()}`,
+                            sender: "engineer",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
 
-                    break;
-                default:
-                    break;
-            }
-        });
+                        break;
+                    case "message":
+                        dispatch(addCopilotMessage({
+                            content: event.content,
+                            id: `engineer-msg-${Date.now()}`,
+                            sender: "engineer",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
 
-        controller.signal.addEventListener("abort", unsubscribe);
+                        break;
+                    case "disconnected":
+                        dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
+                        dispatch(addCopilotMessage({
+                            content: I18n.instance.t("console:common.copilot.escalation.ended", {
+                                engineer: event.engineerEmail
+                            }),
+                            id: `engineer-ended-${Date.now()}`,
+                            sender: "copilot",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
+                        endStream();
+
+                        break;
+                    case "converted":
+                        dispatch(setEscalationState({ status: EscalationStatus.ENDED }));
+                        dispatch(addCopilotMessage({
+                            content: I18n.instance.t("console:common.copilot.escalation.convertedToCase", {
+                                caseId: event.entityCaseId,
+                                engineer: event.engineerEmail
+                            }),
+                            id: `engineer-converted-${Date.now()}`,
+                            sender: "copilot",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
+                        endStream();
+
+                        break;
+                    case "expired":
+                        // Nobody was ever connected -- unlike "disconnected"/
+                        // "converted" (an engineer was here, however briefly),
+                        // the queue simply gave up waiting. Back to IDLE, not
+                        // ENDED, so "Chat with an Engineer" is immediately
+                        // offered again instead of reading as a session that
+                        // happened and finished; the stale caseId/engineerEmail
+                        // are cleared for the same reason.
+                        dispatch(setEscalationState({
+                            caseId: null,
+                            engineerEmail: null,
+                            status: EscalationStatus.IDLE
+                        }));
+                        dispatch(addCopilotMessage({
+                            content: event.message,
+                            id: `engineer-expired-${Date.now()}`,
+                            sender: "copilot",
+                            timestamp: Date.now(),
+                            type: "text"
+                        }));
+                        endStream();
+
+                        break;
+                    case "error":
+                        // Drop-and-recover, not drop-and-give-up: sse.ts's
+                        // openEventStream has no built-in reconnect by
+                        // design (see its own doc comment -- that's the
+                        // caller's job), so leaving this as a terminal
+                        // ERROR state left the panel permanently stuck any
+                        // time a connection was merely dropped or missed,
+                        // with no way back to CONNECTED short of the
+                        // customer reloading the whole page. Status is left
+                        // alone (not reset to IDLE/ERROR) while a reconnect
+                        // is in flight, since the drop is usually transient
+                        // and the UI shouldn't flash an error state for
+                        // something that resolves itself a moment later.
+                        scheduleReconnect();
+
+                        break;
+                    default:
+                        break;
+                }
+            });
+        };
+
+        connect();
+        controller.signal.addEventListener("abort", teardown);
     };
 };
 
@@ -1038,6 +1103,24 @@ type AppDispatch = ThunkDispatch<AppState, unknown, AnyAction>;
 
 export const escalateToEngineer = (errorMessageId: string) => {
     return async (dispatch: AppDispatch, getState: () => AppState): Promise<void> => {
+        // Guards against a duplicate startChat call -- the panel's own
+        // "Chat with an Engineer" affordance isn't reliably hidden/disabled
+        // for every render in between ESCALATING and CONNECTED, so a second
+        // click while one of these is already in flight used to fire a
+        // fresh startChat on top of the existing one, which the backend
+        // then rejected as "you already have a live chat in progress" --
+        // a confusing dead end for a customer who, from their own point of
+        // view, simply clicked the same button twice.
+        const existingStatus: EscalationStatus = getState()?.copilot?.escalation?.status ?? EscalationStatus.IDLE;
+
+        if (
+            existingStatus === EscalationStatus.ESCALATING ||
+            existingStatus === EscalationStatus.QUEUED ||
+            existingStatus === EscalationStatus.CONNECTED
+        ) {
+            return;
+        }
+
         const client: LiveChatClient | null = getLiveChatClient();
 
         if (!client) {
@@ -1150,6 +1233,55 @@ export const sendEngineerMessage = (message: string) => {
                 type: "error"
             }));
         }
+    };
+};
+
+/**
+ * Redux thunk to resume an in-progress engineer-chat escalation that
+ * survived a page refresh via the copilot reducer's own sessionStorage
+ * mirror (see reducers/copilot.ts's ENGINEER_ESCALATION_STORAGE_KEY) --
+ * restoring that value alone only fixes what the panel *displays*, it
+ * doesn't re-open the SSE subscription a fresh escalation would have
+ * started, so without this the customer could see "connected" again after
+ * a refresh but never actually receive the engineer's next message. A
+ * no-op if there's nothing to resume (fresh session, or the last known
+ * status was terminal) or a stream for this case is already running (this
+ * runs on every panel-open, not just the first one after a refresh).
+ *
+ * @returns A thunk function.
+ */
+export const resumeEngineerChatIfNeeded = () => {
+    return (dispatch: Dispatch, getState: () => AppState): void => {
+        const escalation: EscalationStateInterface | undefined = getState()?.copilot?.escalation;
+
+        if (!escalation?.caseId) {
+            return;
+        }
+
+        if (escalation.status !== EscalationStatus.QUEUED && escalation.status !== EscalationStatus.CONNECTED) {
+            return;
+        }
+
+        if (requestManager.hasActiveRequest("engineerStream")) {
+            return;
+        }
+
+        // Only worth telling the customer once they were actually CONNECTED
+        // -- resuming a still-QUEUED escalation looks identical to them as
+        // the original wait, so a "reconnected" message there would be
+        // announcing a connection that, from their point of view, hasn't
+        // happened yet.
+        if (escalation.status === EscalationStatus.CONNECTED) {
+            dispatch(addCopilotMessage({
+                content: I18n.instance.t("console:common.copilot.escalation.resumed"),
+                id: `engineer-resumed-${Date.now()}`,
+                sender: "copilot",
+                timestamp: Date.now(),
+                type: "text"
+            }));
+        }
+
+        dispatch(startEngineerChatStream(escalation.caseId));
     };
 };
 

@@ -27,6 +27,7 @@ import {
     escalateToEngineer,
     fetchCopilotHistory,
     loadMoreCopilotHistory,
+    resumeEngineerChatIfNeeded,
     sendCopilotMessage,
     sendEngineerMessage,
     setCopilotContentType,
@@ -112,6 +113,13 @@ interface UseCopilotPanelInterface {
      * Resolves to true if messages were actually prepended, false otherwise.
      */
     loadMoreHistory: () => Promise<boolean>;
+    /**
+     * Function to resume an in-progress engineer-chat escalation that
+     * survived a page refresh (re-opens the SSE stream if the restored
+     * escalation state is QUEUED/CONNECTED and no stream is active yet).
+     * A no-op otherwise.
+     */
+    resumeEngineerChat: () => void;
     /**
      * The current status message (agent step progress), or null.
      */
@@ -207,6 +215,10 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         return dispatch(loadMoreCopilotHistory());
     }, [ dispatch ]);
 
+    const resumeEngineerChat: () => void = useCallback(() => {
+        dispatch(resumeEngineerChatIfNeeded());
+    }, [ dispatch ]);
+
     return {
         addMessage,
         clearChat,
@@ -222,6 +234,7 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         loadHistory,
         loadMoreHistory,
         messages: copilotState?.messages ?? [],
+        resumeEngineerChat,
         sendMessage,
         setContentType,
         setLoading,

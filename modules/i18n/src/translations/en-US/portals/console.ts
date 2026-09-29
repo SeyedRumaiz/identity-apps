@@ -422,7 +422,8 @@ export const console: ConsoleNS = {
                 failed: "Could not reach a support engineer right now. Please try again in a moment.",
                 unavailable: "Chat with an engineer is not available right now.",
                 sendFailed: "Failed to send your message. Please try again.",
-                engineerLabel: "Support Engineer"
+                engineerLabel: "Support Engineer",
+                resumed: "Reconnected to your ongoing conversation."
             },
             status: {
                 submitting: "Submitting your question..."

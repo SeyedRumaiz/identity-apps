@@ -164,6 +164,7 @@ export interface ConsoleNS {
                 unavailable: string;
                 sendFailed: string;
                 engineerLabel: string;
+                resumed: string;
             };
             status: {
                 submitting: string;
