@@ -8,7 +8,7 @@
     "dependencies": {
         "@asgardeo/auth-react": "^5.1.2",
         "@wso2is/admin.core.v1": "workspace:^",
-        "@wso2is/core": "^2.12.7",
+        "@wso2is/core": "workspace:^",
         "axios": "^1.4.0",
         "react": "^18.2.0",
         "swr": "^2.1.5"

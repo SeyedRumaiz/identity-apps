@@ -42,7 +42,7 @@
         "@oxygen-ui/react-icons": "^2.4.6",
         "@storybook/addons": "^6.5.9",
         "@storybook/theming": "^6.5.9",
-        "@wso2is/core": "^2.13.7",
+        "@wso2is/core": "workspace:^",
         "classnames": "^2.2.6",
         "codemirror": "^5.52.0",
         "dayjs": "^1.11.18",

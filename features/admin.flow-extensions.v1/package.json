@@ -16,7 +16,7 @@
         "@wso2is/core": "workspace:^",
         "@wso2is/forms": "workspace:^",
         "@wso2is/react-components": "workspace:^",
-        "@wso2is/validation": "^2.4.1",
+        "@wso2is/validation": "workspace:^",
         "axios": "^1.7.0",
         "classnames": "^2.2.6",
         "final-form": "^4.20.10",

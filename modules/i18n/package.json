@@ -38,7 +38,7 @@
     "author": "WSO2",
     "license": "Apache-2.0",
     "dependencies": {
-        "@wso2is/core": "^2.13.5",
+        "@wso2is/core": "workspace:^",
         "i18next": "^21.9.1",
         "i18next-browser-languagedetector": "^6.1.5",
         "i18next-xhr-backend": "^3.2.2",
