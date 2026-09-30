@@ -67,33 +67,41 @@ function hasHttpResponse(err: unknown): err is { response: HttpResponse } {
  * already parsed into an object rather than a raw string -- re-stringified
  * here since the SDK does its own JSON.parse either way.
  */
-const requestTransport: LiveChatRequestTransport = {
-    postJson: async (url: string, body: unknown): Promise<{ status: number; text: string }> => {
-        let response: HttpResponse | undefined;
+/**
+ * Runs one AsgardeoSPAClient.httpRequest call and unwraps it into
+ * LiveChatRequestTransport's status/text response shape -- shared by
+ * postJson/getJson below, which differ only in the request they build.
+ */
+async function runHttpRequest(config: Parameters<typeof AsgardeoSPAClient.prototype.httpRequest>[0]): Promise<{
+    status: number;
+    text: string;
+}> {
+    let response: HttpResponse | undefined;
 
-        try {
-            response = await AsgardeoSPAClient.getInstance().httpRequest({
-                data: body,
-                headers: { "Content-Type": "application/json" },
-                method: "POST",
-                url
-            });
-        } catch (err: unknown) {
-            if (hasHttpResponse(err)) {
-                response = err.response;
-            } else {
-                throw err;
-            }
+    try {
+        response = await AsgardeoSPAClient.getInstance().httpRequest(config);
+    } catch (err: unknown) {
+        if (hasHttpResponse(err)) {
+            response = err.response;
+        } else {
+            throw err;
         }
-
-        if (!response) {
-            throw new Error("No response returned from httpRequest.");
-        }
-
-        const text: string = typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? "");
-
-        return { status: response.status, text };
     }
+
+    if (!response) {
+        throw new Error("No response returned from httpRequest.");
+    }
+
+    const text: string = typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? "");
+
+    return { status: response.status, text };
+}
+
+const requestTransport: LiveChatRequestTransport = {
+    getJson: (url: string): Promise<{ status: number; text: string }> =>
+        runHttpRequest({ method: "GET", url }),
+    postJson: (url: string, body: unknown): Promise<{ status: number; text: string }> =>
+        runHttpRequest({ data: body, headers: { "Content-Type": "application/json" }, method: "POST", url })
 };
 
 /**

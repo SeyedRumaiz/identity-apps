@@ -18,7 +18,14 @@
 
 import { AppState } from "@wso2is/admin.core.v1/store";
 import { I18n } from "@wso2is/i18n";
-import { ChatMessage, LiveChatClient, LiveChatError, LiveChatEvent, StartChatResult } from "@wso2/live-chat-client";
+import {
+    ChatMessage,
+    LiveChatClient,
+    LiveChatError,
+    LiveChatEvent,
+    LiveChatHistoryMessage,
+    StartChatResult
+} from "@wso2/live-chat-client";
 import { AnyAction, Dispatch } from "redux";
 import { ThunkDispatch } from "redux-thunk";
 import {
@@ -1250,8 +1257,23 @@ export const sendEngineerMessage = (message: string) => {
  *
  * @returns A thunk function.
  */
+/** Maps a getHistory role onto CopilotMessageInterface's own sender union
+ * -- the only three values that transcript can ever contain, matching
+ * router.PriorMessageRole on the backend one-for-one. */
+const senderForHistoryRole = (role: LiveChatHistoryMessage["role"]): CopilotMessageInterface["sender"] => {
+    switch (role) {
+        case "engineer":
+            return "engineer";
+        case "customer":
+            return "user";
+        case "assistant":
+        default:
+            return "copilot";
+    }
+};
+
 export const resumeEngineerChatIfNeeded = () => {
-    return (dispatch: Dispatch, getState: () => AppState): void => {
+    return async (dispatch: Dispatch, getState: () => AppState): Promise<void> => {
         const escalation: EscalationStateInterface | undefined = getState()?.copilot?.escalation;
 
         if (!escalation?.caseId) {
@@ -1264,6 +1286,39 @@ export const resumeEngineerChatIfNeeded = () => {
 
         if (requestManager.hasActiveRequest("engineerStream")) {
             return;
+        }
+
+        // Only backfill the transcript on a genuinely empty panel -- a
+        // panel that already has messages (this thunk also runs on every
+        // ordinary panel-open, not just the first one after a refresh --
+        // see its own call site in copilot-panel.tsx) already has them
+        // rendered, and re-fetching + re-appending here would duplicate
+        // every message instead of restoring anything.
+        const caseId: string = escalation.caseId;
+        const hasNoMessages: boolean = (getState()?.copilot?.messages ?? []).length === 0;
+
+        if (hasNoMessages) {
+            const client: LiveChatClient | null = getLiveChatClient();
+
+            if (client) {
+                try {
+                    const history: LiveChatHistoryMessage[] = await client.getHistory(caseId);
+
+                    history.forEach((message: LiveChatHistoryMessage, index: number) => {
+                        dispatch(addCopilotMessage({
+                            content: message.content,
+                            id: `history-${index}-${message.createdAt ?? Date.now()}`,
+                            sender: senderForHistoryRole(message.role),
+                            timestamp: message.createdAt ? new Date(message.createdAt).getTime() : Date.now(),
+                            type: "text"
+                        }));
+                    });
+                } catch (_error: unknown) {
+                    // Best-effort: a failed history fetch still lets the
+                    // stream resume below -- an empty transcript with a
+                    // live connection beats no connection at all.
+                }
+            }
         }
 
         // Only worth telling the customer once they were actually CONNECTED
@@ -1281,7 +1336,7 @@ export const resumeEngineerChatIfNeeded = () => {
             }));
         }
 
-        dispatch(startEngineerChatStream(escalation.caseId));
+        dispatch(startEngineerChatStream(caseId));
     };
 };
 
