@@ -17,7 +17,9 @@
  */
 
 import { Theme } from "@mui/material/styles";
+import Alert from "@oxygen-ui/react/Alert";
 import Box from "@oxygen-ui/react/Box";
+import Button from "@oxygen-ui/react/Button";
 import Drawer from "@oxygen-ui/react/Drawer";
 import Stack from "@oxygen-ui/react/Stack";
 import Typography from "@oxygen-ui/react/Typography";
@@ -30,8 +32,8 @@ import { useSelector } from "react-redux";
 import CopilotChat from "./copilot-chat";
 import CopilotHeader from "./copilot-header";
 import CopilotWelcome from "./copilot-welcome";
+import SupportChatWidget, { showSupportChat, useSupportChatInProgress } from "./support-chat-widget";
 import useCopilotPanel from "../hooks/use-copilot-panel";
-import { abortEngineerStream } from "../store/actions/copilot";
 import { CopilotContentType } from "../store/types/copilot-action-types";
 
 /**
@@ -74,9 +76,10 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
         messages,
         isLoading,
         hidePanel,
-        loadHistory,
-        resumeEngineerChat
+        loadHistory
     } = useCopilotPanel();
+
+    const supportChatInProgress: boolean = useSupportChatInProgress();
 
     /**
      * Load chat history when panel becomes visible.
@@ -88,37 +91,18 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
     }, [ isVisible, isAuthenticated, loadHistory ]);
 
     /**
-     * Resume an engineer-chat escalation that survived a page refresh --
-     * see resumeEngineerChatIfNeeded's own doc comment for why restoring
-     * the Redux state alone (the reducer's sessionStorage mirror) isn't
-     * enough on its own. Safe to run on every panel-open, not just the
-     * first one after a refresh: it no-ops once a stream is already active.
-     */
-    useEffect(() => {
-        if (isVisible && isAuthenticated) {
-            resumeEngineerChat();
-        }
-    }, [ isVisible, isAuthenticated, resumeEngineerChat ]);
-
-    /**
-     * The panel is toggled via isVisible rather than unmounted/remounted
-     * for a normal show/hide, so this only fires on a genuine unmount
-     * (e.g. navigating away from the Console shell entirely) -- but that's
-     * exactly when a still-active engineer-chat SSE stream would otherwise
-     * leak, since nothing else in this component's lifecycle guarantees
-     * its unsubscribe() gets called.
-     */
-    useEffect(() => {
-        return () => {
-            abortEngineerStream();
-        };
-    }, []);
-
-    /**
      * Handle panel close.
      */
     const handleClose: () => void = useCallback(() => {
         hidePanel();
+    }, [ hidePanel ]);
+
+    /**
+     * Switch from Ask AI back to the support chat in progress.
+     */
+    const handleOpenSupportChat: () => void = useCallback(() => {
+        hidePanel();
+        showSupportChat();
     }, [ hidePanel ]);
 
     /**
@@ -175,80 +159,103 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
     };
 
     return (
-        <Drawer
-            anchor="right"
-            open={ isVisible }
-            onClose={ handleClose }
-            variant="persistent"
-            transitionDuration={ {
-                enter: 400,
-                exit: 400
-            } }
-            className={ classNames("copilot-panel", className, {
-                "copilot-panel-expanded": isExpanded
-            }) }
-            ModalProps={ {
-                hideBackdrop: true,
-                keepMounted: true
-            } }
-            PaperProps={ {
-                className: "copilot-panel-paper",
-                style: {
-                    margin: 0,
-                    padding: 0,
-                    width: isExpanded ? "100%" : width
-                }
-            } }
-            data-componentid={ componentId }
-            sx={ (theme: Theme) => ({
-                "& *": {
-                    transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)"
-                },
-                "& .MuiDrawer-paper": {
-                    height: "calc(100vh - var(--oxygen-customComponents-Header-properties-min-height))",
-                    left: "auto",
-                    margin: 0,
-                    maxHeight: "calc(100vh - var(--oxygen-customComponents-Header-properties-min-height))",
-                    padding: 0,
-                    right: 0,
-                    top: "var(--oxygen-customComponents-Header-properties-min-height)"
-                },
-                "& .MuiDrawer-root": {
-                    margin: 0,
-                    padding: 0
-                },
-                "@media (max-width: 768px)": {
-                    "& .MuiDrawer-paper": {
-                        maxWidth: "none",
-                        width: "100%"
+        <>
+            <SupportChatWidget />
+            <Drawer
+                anchor="right"
+                open={ isVisible }
+                onClose={ handleClose }
+                variant="persistent"
+                transitionDuration={ {
+                    enter: 400,
+                    exit: 400
+                } }
+                className={ classNames("copilot-panel", className, {
+                    "copilot-panel-expanded": isExpanded
+                }) }
+                ModalProps={ {
+                    hideBackdrop: true,
+                    keepMounted: true
+                } }
+                PaperProps={ {
+                    className: "copilot-panel-paper",
+                    style: {
+                        margin: 0,
+                        padding: 0,
+                        width: isExpanded ? "100%" : width
                     }
-                },
-                margin: 0,
-                padding: 0,
-                zIndex: theme.zIndex.drawer + 30
-            }) }
-        >
-            <Stack
-                direction="column"
-                sx={ { bgcolor: "background.paper", height: "100%", overflow: "hidden" } }
+                } }
+                data-componentid={ componentId }
+                sx={ (theme: Theme) => ({
+                    "& *": {
+                        transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)"
+                    },
+                    "& .MuiDrawer-paper": {
+                        height: "calc(100vh - var(--oxygen-customComponents-Header-properties-min-height))",
+                        left: "auto",
+                        margin: 0,
+                        maxHeight: "calc(100vh - var(--oxygen-customComponents-Header-properties-min-height))",
+                        padding: 0,
+                        right: 0,
+                        top: "var(--oxygen-customComponents-Header-properties-min-height)"
+                    },
+                    "& .MuiDrawer-root": {
+                        margin: 0,
+                        padding: 0
+                    },
+                    "@media (max-width: 768px)": {
+                        "& .MuiDrawer-paper": {
+                            maxWidth: "none",
+                            width: "100%"
+                        }
+                    },
+                    margin: 0,
+                    padding: 0,
+                    zIndex: theme.zIndex.drawer + 30
+                }) }
             >
-                <CopilotHeader
-                    onClose={ handleClose }
-                    onToggleExpand={ handleToggleExpand }
-                    isExpanded={ isExpanded }
-                    data-componentid={ `${componentId}-header` }
-                />
-
-                <Box
-                    sx={ {
-                        flex: 1,
-                        overflow: "hidden"
-                    } }
+                <Stack
+                    direction="column"
+                    sx={ { bgcolor: "background.paper", height: "100%", overflow: "hidden" } }
                 >
-                    { renderContent() }
-                </Box>
-            </Stack>
-        </Drawer>
+                    <CopilotHeader
+                        onClose={ handleClose }
+                        onToggleExpand={ handleToggleExpand }
+                        isExpanded={ isExpanded }
+                        data-componentid={ `${componentId}-header` }
+                    />
+
+                    { supportChatInProgress && (
+                        <Alert
+                            severity="info"
+                            action={ (
+                                <Button
+                                    color="inherit"
+                                    size="small"
+                                    onClick={ handleOpenSupportChat }
+                                    data-componentid={ `${componentId}-open-support-chat` }
+                                >
+                                    { t("console:common.copilot.escalation.openChat") }
+                                </Button>
+                            ) }
+                            sx={ { borderRadius: 0 } }
+                            data-componentid={ `${componentId}-support-chat-in-progress` }
+                        >
+                            { t("console:common.copilot.escalation.inProgress") }
+                        </Alert>
+                    ) }
+
+                    <Box
+                        sx={ {
+                            flex: 1,
+                            overflow: "hidden"
+                        } }
+                    >
+                        { renderContent() }
+                    </Box>
+                </Stack>
+            </Drawer>
+        </>
     );
 };
 

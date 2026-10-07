@@ -67,15 +67,7 @@ export enum CopilotActionTypes {
     /**
      * Action type to set the isLoadingMoreHistory flag independently of pagination metadata.
      */
-    SET_IS_LOADING_MORE_HISTORY = "SET_IS_LOADING_MORE_HISTORY",
-    /**
-     * Action type to set Ask AI's stable per-panel-session context id.
-     */
-    SET_ASK_AI_CONTEXT_ID = "SET_ASK_AI_CONTEXT_ID",
-    /**
-     * Action type to update "Chat with an Engineer" escalation state.
-     */
-    SET_ESCALATION_STATE = "SET_ESCALATION_STATE"
+    SET_IS_LOADING_MORE_HISTORY = "SET_IS_LOADING_MORE_HISTORY"
 }
 
 /**
@@ -84,10 +76,7 @@ export enum CopilotActionTypes {
 export interface CopilotMessageInterface {
     id: string;
     content: string;
-    // "engineer" is a live human reply after a "Chat with an Engineer"
-    // escalation is accepted (see EscalationStatus.CONNECTED) -- never
-    // produced by Ask AI itself.
-    sender: "user" | "copilot" | "engineer";
+    sender: "user" | "copilot";
     timestamp: number;
     type?: "text" | "code" | "error" | "streaming";
     suggestions?: string[];
@@ -102,38 +91,6 @@ export enum CopilotContentType {
     CHAT = "chat",
     HELP = "help",
     DOCUMENTATION = "documentation"
-}
-
-/**
- * Status of a "Chat with an Engineer" escalation raised from an Ask AI
- * error -- see console-chat-bridge's own README for the backend side of
- * this flow. caseId/liveChatId (EscalationStateInterface.caseId) is always
- * a fresh id minted by that bridge, NEVER CopilotPanelStateInterface's own
- * askAiContextId -- see that field's doc comment for why these two
- * identities must stay distinct.
- */
-export enum EscalationStatus {
-    /** No escalation in progress -- the "Chat with an Engineer" button may be shown on an error. */
-    IDLE = "idle",
-    /** POST /support/chats is in flight. */
-    ESCALATING = "escalating",
-    /** Escalated; waiting for chat-routing-service to assign an engineer. */
-    QUEUED = "queued",
-    /** An engineer accepted; the chat input now sends engineer messages. */
-    CONNECTED = "connected",
-    /** The engineer ended the session, or it was converted to a case. */
-    ENDED = "ended",
-    /** The escalation attempt itself failed (e.g. bridge unreachable). */
-    ERROR = "error"
-}
-
-/**
- * State of the current (at most one) live-engineer-chat escalation.
- */
-export interface EscalationStateInterface {
-    status: EscalationStatus;
-    caseId: string | null;
-    engineerEmail: string | null;
 }
 
 /**
@@ -153,17 +110,6 @@ export interface CopilotPanelStateInterface {
     historyTotal: number;
     /** Whether a "load earlier" request is in progress. */
     isLoadingMoreHistory: boolean;
-    /**
-     * Ask AI's stable per-panel-session context id, generated client-side
-     * (crypto.randomUUID()) the first time it's needed -- Ask AI's own SSE
-     * responses don't reliably return one (see copilot-api.ts's
-     * CopilotChatResponse.conversationId, currently unused). Sent to
-     * console-chat-bridge as an escalation's conversationId. Reset on
-     * CLEAR_COPILOT_CHAT so a cleared chat starts a fresh context.
-     */
-    askAiContextId: string | null;
-    /** State of the current (at most one) "Chat with an Engineer" escalation. */
-    escalation: EscalationStateInterface;
 }
 
 /**
@@ -277,23 +223,6 @@ export interface SetIsLoadingMoreHistoryActionInterface {
 }
 
 /**
- * Set Ask AI context id action interface.
- */
-export interface SetAskAiContextIdActionInterface {
-    payload: string;
-    type: CopilotActionTypes.SET_ASK_AI_CONTEXT_ID;
-}
-
-/**
- * Set escalation state action interface. Partial payload: only provided
- * fields are merged into the existing EscalationStateInterface.
- */
-export interface SetEscalationStateActionInterface {
-    payload: Partial<EscalationStateInterface>;
-    type: CopilotActionTypes.SET_ESCALATION_STATE;
-}
-
-/**
  * Export action interfaces.
  */
 export type CopilotActions = SetCopilotPanelVisibilityActionInterface
@@ -307,6 +236,4 @@ export type CopilotActions = SetCopilotPanelVisibilityActionInterface
     | SetCopilotStatusMessageActionInterface
     | SetCopilotHistoryPaginationActionInterface
     | PrependCopilotMessagesActionInterface
-    | SetIsLoadingMoreHistoryActionInterface
-    | SetAskAiContextIdActionInterface
-    | SetEscalationStateActionInterface;
+    | SetIsLoadingMoreHistoryActionInterface;

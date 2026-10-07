@@ -1,0 +1,15 @@
+{
+    "tenant": "identity-console",
+    "conversationIdPrefix": "identity-console-",
+    "layout": {
+        "showLauncher": false,
+        "zIndex": 1250
+    },
+    "theme": {
+        "fontFamily": "Gilmer, sans-serif",
+        "borderRadius": "8px"
+    },
+    "texts": {
+        "title": "Chat with an Engineer"
+    }
+}

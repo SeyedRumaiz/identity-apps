@@ -16,20 +16,21 @@
  * under the License.
  */
 
+import type { LiveChatPriorMessage } from "@wso2/live-chat-widget";
 import { AppState } from "@wso2is/admin.core.v1/store";
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { AnyAction } from "redux";
 import { ThunkDispatch } from "redux-thunk";
+import { openSupportChat } from "../components/support-chat-widget";
+import { MAX_ESCALATION_CONTEXT_MESSAGES } from "../constants/copilot-chat-constants";
 import {
     addCopilotMessage,
     clearCopilotChatWithApi,
-    escalateToEngineer,
     fetchCopilotHistory,
     loadMoreCopilotHistory,
-    resumeEngineerChatIfNeeded,
     sendCopilotMessage,
-    sendEngineerMessage,
     setCopilotContentType,
     setCopilotPanelLoading,
     setCopilotPanelVisibility,
@@ -38,8 +39,7 @@ import {
 import {
     CopilotContentType,
     CopilotMessageInterface,
-    CopilotPanelStateInterface,
-    EscalationStatus
+    CopilotPanelStateInterface
 } from "../store/types/copilot-action-types";
 
 type AppDispatch = ThunkDispatch<AppState, unknown, AnyAction>;
@@ -114,30 +114,13 @@ interface UseCopilotPanelInterface {
      */
     loadMoreHistory: () => Promise<boolean>;
     /**
-     * Function to resume an in-progress engineer-chat escalation that
-     * survived a page refresh (re-opens the SSE stream if the restored
-     * escalation state is QUEUED/CONNECTED and no stream is active yet).
-     * A no-op otherwise.
-     */
-    resumeEngineerChat: () => void;
-    /**
      * The current status message (agent step progress), or null.
      */
     statusMessage: string | null;
     /**
-     * Status of the current "Chat with an Engineer" escalation, if any.
+     * Function to hand the conversation over to a support engineer.
      */
-    escalationStatus: EscalationStatus;
-    /**
-     * The connected engineer's email for the current escalation, or null
-     * before one has joined -- set once, on the "assigned" event (see
-     * store/actions/copilot.ts).
-     */
-    engineerEmail: string | null;
-    /**
-     * Function to escalate an Ask AI error (by that error message's id) to a live engineer.
-     */
-    escalateToEngineer: (errorMessageId: string) => void;
+    escalateToEngineer: () => void;
 }
 
 /**
@@ -148,6 +131,7 @@ interface UseCopilotPanelInterface {
  */
 const useCopilotPanel = (): UseCopilotPanelInterface => {
     const dispatch: AppDispatch = useDispatch<AppDispatch>();
+    const { t } = useTranslation();
     const copilotState: CopilotPanelStateInterface = useSelector((state: AppState) => state.copilot);
 
     const showPanel: () => void = useCallback(() => {
@@ -163,29 +147,40 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
     }, [ dispatch ]);
 
     /**
-     * Send a message. Routes to the connected engineer once an escalation
-     * has been accepted (copilotState.escalation.status === CONNECTED),
-     * otherwise goes to Ask AI as before -- callers (copilot-chat.tsx) do
-     * not need to know which is currently active.
-     * Token handling is done automatically by AsgardeoSPAClient in either
-     * case.
+     * Send a message to the copilot.
+     * Token handling is done automatically by AsgardeoSPAClient.
      */
     const sendMessage: (message: string) => void = useCallback((message: string) => {
-        if (copilotState?.escalation?.status === EscalationStatus.CONNECTED) {
-            dispatch(sendEngineerMessage(message));
-        } else {
-            dispatch(sendCopilotMessage(message));
-        }
-    }, [ dispatch, copilotState?.escalation?.status ]);
+        dispatch(sendCopilotMessage(message));
+    }, [ dispatch ]);
 
     /**
-     * Escalate an Ask AI error to a live engineer.
+     * Hand over to a support engineer: hides Ask AI and opens the support
+     * chat with the latest Ask AI turns, so the engineer sees what was
+     * already tried. Says so in Ask AI when live chat is not configured.
      */
-    const escalateToEngineerCallback: (errorMessageId: string) => void = useCallback(
-        (errorMessageId: string) => {
-            dispatch(escalateToEngineer(errorMessageId));
-        }, [ dispatch ]
-    );
+    const escalateToEngineer: () => void = useCallback(() => {
+        const priorMessages: LiveChatPriorMessage[] = (copilotState?.messages ?? [])
+            .slice(-MAX_ESCALATION_CONTEXT_MESSAGES)
+            .map((message: CopilotMessageInterface): LiveChatPriorMessage => ({
+                content: message.content,
+                role: message.sender === "user" ? "customer" : "assistant"
+            }));
+
+        if (openSupportChat(priorMessages)) {
+            dispatch(setCopilotPanelVisibility(false));
+
+            return;
+        }
+
+        dispatch(addCopilotMessage({
+            content: t("console:common.copilot.escalation.unavailable"),
+            id: `escalation-unavailable-${Date.now()}`,
+            sender: "copilot",
+            timestamp: Date.now(),
+            type: "error"
+        }));
+    }, [ dispatch, copilotState?.messages, t ]);
 
     const addMessage: (message: CopilotMessageInterface) => void = useCallback((message: CopilotMessageInterface) => {
         dispatch(addCopilotMessage(message));
@@ -215,17 +210,11 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         return dispatch(loadMoreCopilotHistory());
     }, [ dispatch ]);
 
-    const resumeEngineerChat: () => void = useCallback(() => {
-        dispatch(resumeEngineerChatIfNeeded());
-    }, [ dispatch ]);
-
     return {
         addMessage,
         clearChat,
         contentType: copilotState?.contentType ?? CopilotContentType.CHAT,
-        engineerEmail: copilotState?.escalation?.engineerEmail ?? null,
-        escalateToEngineer: escalateToEngineerCallback,
-        escalationStatus: copilotState?.escalation?.status ?? EscalationStatus.IDLE,
+        escalateToEngineer,
         hasMoreHistory: copilotState?.hasMoreHistory ?? false,
         hidePanel,
         isLoading: copilotState?.isLoading ?? false,
@@ -234,7 +223,6 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         loadHistory,
         loadMoreHistory,
         messages: copilotState?.messages ?? [],
-        resumeEngineerChat,
         sendMessage,
         setContentType,
         setLoading,

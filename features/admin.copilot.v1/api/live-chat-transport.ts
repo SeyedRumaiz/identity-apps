@@ -18,24 +18,23 @@
 
 import { AsgardeoSPAClient, HttpResponse } from "@asgardeo/auth-react";
 import { AppState, store } from "@wso2is/admin.core.v1/store";
-import {
-    LiveChatClient,
+import type {
     LiveChatRequestTransport,
     LiveChatStreamTransport,
-    createLiveChatClient
-} from "@wso2/live-chat-client";
+    LiveChatTransport
+} from "@wso2/live-chat-widget";
 
 /**
- * Product-specific glue between @wso2/live-chat-client and this app's auth.
+ * Product-specific glue between the wso2-live-chat web component and this
+ * app's auth.
  *
  * This deployment's Asgardeo storage mode is "webWorker", which never
- * exposes a raw access-token string to main-thread code -- so the SDK's
- * default fetch()-based transport, which needs that string to build its
- * Authorization header, cannot be used here. Instead this file implements
- * the SDK's requestTransport/streamTransport interfaces on top of
+ * exposes a raw access-token string to main-thread code -- so the web
+ * component's default fetch()-based requests, which need that string to
+ * build their Authorization header, cannot be used here. Instead this file
+ * implements the component's request and stream transports on top of
  * AsgardeoSPAClient.httpRequest/httpStreamRequest, which attach the token
- * inside the worker itself. The SDK never imports or knows about
- * AsgardeoSPAClient -- this file is the only place the two meet.
+ * inside the worker itself.
  */
 
 /**
@@ -106,8 +105,8 @@ const requestTransport: LiveChatRequestTransport = {
 
 /**
  * Adapts AsgardeoSPAClient's httpStreamRequest to LiveChatStreamTransport.
- * No separate cancellation wiring needed: the SDK's own unsubscribe()
- * calls reader.cancel() on a reader it gets from this stream, which
+ * No separate cancellation wiring needed: the web component's own
+ * unsubscribe calls reader.cancel() on a reader it gets from this stream, which
  * propagates to the underlying connection per the standard ReadableStream
  * contract.
  */
@@ -126,9 +125,6 @@ const streamTransport: LiveChatStreamTransport = {
         return stream;
     }
 };
-
-/** console-chat-bridge tenant slug this integration always escalates through. */
-const LIVE_CHAT_TENANT: string = "identity-console";
 
 /**
  * console-chat-bridge's configured base URL, or "" if this deployment
@@ -152,33 +148,8 @@ export const getSupportEscalationBaseUrl = (): string => {
     return `${window.location.origin}${configured}`;
 };
 
-let cachedClient: LiveChatClient | null = null;
-let cachedForBaseUrl: string | null = null;
-
-/**
- * A LiveChatClient bound to this deployment's console-chat-bridge base URL
- * and the fixed identity-console tenant, or null if unconfigured.
- * Memoized per base URL to avoid rebuilding on every call.
- * Hands back an SDK client pre-wired with requestTransport/streamTransport
- * built on AsgardeoSPAClient.
- */
-export const getLiveChatClient = (): LiveChatClient | null => {
-    const baseUrl: string = getSupportEscalationBaseUrl();
-
-    if (!baseUrl) {
-        return null;
-    }
-    if (cachedClient && cachedForBaseUrl === baseUrl) {
-        return cachedClient;
-    }
-
-    cachedClient = createLiveChatClient({
-        baseUrl,
-        requestTransport,
-        streamTransport,
-        tenant: LIVE_CHAT_TENANT
-    });
-    cachedForBaseUrl = baseUrl;
-
-    return cachedClient;
+/** The transports the wso2-live-chat element uses instead of a token function. */
+export const liveChatTransport: LiveChatTransport = {
+    requestTransport,
+    streamTransport
 };

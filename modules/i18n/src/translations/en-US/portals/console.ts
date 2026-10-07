@@ -414,16 +414,9 @@ export const console: ConsoleNS = {
             },
             escalation: {
                 chatWithEngineer: "Chat with an Engineer",
-                connecting: "Connecting you to a support engineer...",
-                queued: "You're in the queue. A support engineer will be with you shortly.",
-                connected: "{{engineer}} has joined the chat.",
-                ended: "{{engineer}} has ended this chat.",
-                convertedToCase: "{{engineer}} converted this chat into support case {{caseId}}.",
-                failed: "Could not reach a support engineer right now. Please try again in a moment.",
                 unavailable: "Chat with an engineer is not available right now.",
-                sendFailed: "Failed to send your message. Please try again.",
-                engineerLabel: "Support Engineer",
-                resumed: "Reconnected to your ongoing conversation."
+                inProgress: "You have an open chat with a support engineer.",
+                openChat: "Open chat"
             },
             status: {
                 submitting: "Submitting your question..."

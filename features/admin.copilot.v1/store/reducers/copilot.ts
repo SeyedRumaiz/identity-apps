@@ -22,91 +22,14 @@ import {
     CopilotActions,
     CopilotContentType,
     CopilotMessageInterface,
-    CopilotPanelStateInterface,
-    EscalationStateInterface,
-    EscalationStatus
+    CopilotPanelStateInterface
 } from "../types/copilot-action-types";
-
-/**
- * Session-storage key an in-progress "Chat with an Engineer" escalation is
- * mirrored under, keyed by tab (not shared across tabs, unlike
- * localStorage) so a page refresh doesn't wipe Redux's own in-memory
- * escalation state out from under a session chat-routing-service still
- * considers live -- without this, a refresh left the panel showing IDLE
- * while the server still had an ACTIVE/ACCEPTED case for that customer,
- * so the next "Chat with an Engineer" click was rejected server-side
- * ("you already have a live chat in progress") with no way back into the
- * chat that message was referring to. See resumeEngineerChatIfNeeded in
- * store/actions/copilot.ts for the other half: restoring this value alone
- * doesn't re-open the SSE subscription, that thunk does.
- */
-const ENGINEER_ESCALATION_STORAGE_KEY: string = "wso2is.copilot.engineerEscalation";
-
-const defaultEscalationState: EscalationStateInterface = {
-    caseId: null,
-    engineerEmail: null,
-    status: EscalationStatus.IDLE
-};
-
-/** Reads a persisted escalation back out of sessionStorage, falling back to
- * the default IDLE state on first load, a cleared storage, or anything
- * that fails to parse (a schema change between reloads, private-browsing
- * storage that silently no-ops, etc.). */
-const loadPersistedEscalation = (): EscalationStateInterface => {
-    try {
-        const raw: string | null = sessionStorage.getItem(ENGINEER_ESCALATION_STORAGE_KEY);
-
-        if (!raw) {
-            return defaultEscalationState;
-        }
-
-        const parsed: Partial<EscalationStateInterface> = JSON.parse(raw);
-
-        if (!parsed?.caseId || !parsed?.status) {
-            return defaultEscalationState;
-        }
-
-        return {
-            caseId: parsed.caseId,
-            engineerEmail: parsed.engineerEmail ?? null,
-            status: parsed.status
-        };
-    } catch {
-        return defaultEscalationState;
-    }
-};
-
-/** Mirrors escalation into sessionStorage so a refresh can restore it --
- * only while there is something worth resuming (ESCALATING/QUEUED/
- * CONNECTED with a real caseId); IDLE/ENDED/ERROR clear it, since there is
- * nothing left on the server for a resume to attach to. */
-const persistEscalation = (escalation: EscalationStateInterface): void => {
-    try {
-        const isResumable: boolean = Boolean(escalation.caseId) && (
-            escalation.status === EscalationStatus.ESCALATING ||
-            escalation.status === EscalationStatus.QUEUED ||
-            escalation.status === EscalationStatus.CONNECTED
-        );
-
-        if (isResumable) {
-            sessionStorage.setItem(ENGINEER_ESCALATION_STORAGE_KEY, JSON.stringify(escalation));
-        } else {
-            sessionStorage.removeItem(ENGINEER_ESCALATION_STORAGE_KEY);
-        }
-    } catch {
-        // Best-effort only -- a refresh simply won't resume this time.
-    }
-};
 
 /**
  * Initial state for the copilot reducer.
  */
-const initialEscalationState: EscalationStateInterface = loadPersistedEscalation();
-
 const initialState: CopilotPanelStateInterface = {
-    askAiContextId: null,
     contentType: CopilotContentType.CHAT,
-    escalation: initialEscalationState,
     hasMoreHistory: false,
     historyOffset: 0,
     historyTotal: 0,
@@ -175,15 +98,8 @@ export const copilotReducer: Reducer<CopilotPanelStateInterface> = (
                 )
             };
         case CopilotActionTypes.CLEAR_COPILOT_CHAT:
-            persistEscalation(defaultEscalationState);
-
             return {
                 ...state,
-                // A cleared chat starts a fresh Ask AI context and drops any
-                // escalation state -- there is nothing left on screen for an
-                // in-progress escalation to attach to.
-                askAiContextId: null,
-                escalation: defaultEscalationState,
                 hasMoreHistory: false,
                 historyOffset: 0,
                 historyTotal: 0,
@@ -225,24 +141,6 @@ export const copilotReducer: Reducer<CopilotPanelStateInterface> = (
                 ...state,
                 isLoadingMoreHistory: action.payload
             };
-        case CopilotActionTypes.SET_ASK_AI_CONTEXT_ID:
-            return {
-                ...state,
-                askAiContextId: action.payload
-            };
-        case CopilotActionTypes.SET_ESCALATION_STATE: {
-            const nextEscalation: EscalationStateInterface = {
-                ...state.escalation,
-                ...action.payload
-            };
-
-            persistEscalation(nextEscalation);
-
-            return {
-                ...state,
-                escalation: nextEscalation
-            };
-        }
         default:
             return state;
     }

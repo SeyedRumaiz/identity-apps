@@ -155,16 +155,9 @@ export interface ConsoleNS {
             };
             escalation: {
                 chatWithEngineer: string;
-                connecting: string;
-                queued: string;
-                connected: string;
-                ended: string;
-                convertedToCase: string;
-                failed: string;
                 unavailable: string;
-                sendFailed: string;
-                engineerLabel: string;
-                resumed: string;
+                inProgress: string;
+                openChat: string;
             };
             status: {
                 submitting: string;
