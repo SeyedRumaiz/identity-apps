@@ -626,7 +626,11 @@ export default defineConfig(({ mode }: { mode: string }) => {
                 define: {
                     global: "globalThis"
                 }
-            }
+            },
+            // A vendored tarball whose version changes without Vite noticing,
+            // so a pre-bundled copy would keep serving the old version. It is
+            // a single ES module with no imports and needs no pre-bundling.
+            exclude: [ "@wso2/live-chat-widget" ]
         },
         plugins: [
             tsconfigPaths({
