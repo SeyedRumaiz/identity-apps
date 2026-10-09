@@ -3844,8 +3844,8 @@ importers:
         specifier: ^2.4.5
         version: 2.4.6(de6c3632db206d00d0d194ce20f3d981)
       '@wso2/live-chat-widget':
-        specifier: file:./vendor/wso2-live-chat-widget-0.1.3.tgz
-        version: file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.3.tgz
+        specifier: file:./vendor/wso2-live-chat-widget-0.1.4.tgz
+        version: file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.4.tgz
       '@wso2is/admin.core.v1':
         specifier: workspace:^
         version: link:../admin.core.v1
@@ -16301,9 +16301,9 @@ packages:
       webpack-dev-server:
         optional: true
 
-  '@wso2/live-chat-widget@file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.3.tgz':
-    resolution: {integrity: sha512-RpmklsGCIM/oeoa9hZj+KBbbeT0ag+grTdk3H8K6ekr2spoJg/PvD5mJaZ/2qpRCZrFV5ajzdwUJl+PoR9rMdQ==, tarball: file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.3.tgz}
-    version: 0.1.3
+  '@wso2/live-chat-widget@file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.4.tgz':
+    resolution: {integrity: sha512-8wrMYU9nDRkWtp8ZZR0yEaajcp/pyEgfJeSD0nJdn8kwhVPKV7Du3pnVuEL581wJan0JjNzVwOql4Bu6JjSbrw==, tarball: file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.4.tgz}
+    version: 0.1.4
     engines: {node: '>=18.0.0'}
 
   '@xmldom/xmldom@0.8.15':
@@ -29037,7 +29037,7 @@ snapshots:
       webpack: 5.101.3(@swc/core@1.5.7(@swc/helpers@0.5.21))(esbuild@0.25.12)(webpack-cli@5.1.4)
       webpack-cli: 5.1.4(webpack@5.101.3)
 
-  '@wso2/live-chat-widget@file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.3.tgz': {}
+  '@wso2/live-chat-widget@file:features/admin.copilot.v1/vendor/wso2-live-chat-widget-0.1.4.tgz': {}
 
   '@xmldom/xmldom@0.8.15': {}
 
