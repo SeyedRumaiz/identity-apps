@@ -24,7 +24,7 @@ import { FeatureAccessConfigInterface, useRequiredScopes } from "@wso2is/access-
 import { getProfileInformation } from "@wso2is/admin.authentication.v1/store";
 import AISparkleIcon from "@wso2is/admin.copilot.v1/components/ai-sparkle-icon";
 import CopilotPanel from "@wso2is/admin.copilot.v1/components/copilot-panel";
-import useCopilotPanel from "@wso2is/admin.copilot.v1/hooks/use-copilot-panel";
+import { useSupportChatPanel } from "@wso2is/admin.copilot.v1/components/support-chat-widget";
 import Header from "@wso2is/admin.core.v1/components/header";
 import { ProtectedRoute } from "@wso2is/admin.core.v1/components/protected-route";
 import { getEmptyPlaceholderIllustrations } from "@wso2is/admin.core.v1/configs/ui";
@@ -89,7 +89,9 @@ const DefaultLayout: FunctionComponent<DefaultLayoutPropsInterface> = ({
 
     const hasGettingStartedViewPermission: boolean = useRequiredScopes(gettingStartedFeatureConfig?.scopes?.feature);
 
-    const { isVisible: isCopilotVisible, togglePanel: toggleCopilotPanel } = useCopilotPanel();
+    // The header's AI button opens the support assistant (AI first, then a
+    // support engineer), which replaces the Ask AI drawer for now.
+    const { isOpen: isCopilotVisible, toggle: toggleCopilotPanel } = useSupportChatPanel();
     const isFirstLevelOrganization: boolean = useSelector(
         (state: AppState) => state.organization.isFirstLevelOrganization
     );

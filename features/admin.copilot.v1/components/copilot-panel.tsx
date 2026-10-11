@@ -17,9 +17,7 @@
  */
 
 import { Theme } from "@mui/material/styles";
-import Alert from "@oxygen-ui/react/Alert";
 import Box from "@oxygen-ui/react/Box";
-import Button from "@oxygen-ui/react/Button";
 import Drawer from "@oxygen-ui/react/Drawer";
 import Stack from "@oxygen-ui/react/Stack";
 import Typography from "@oxygen-ui/react/Typography";
@@ -32,7 +30,7 @@ import { useSelector } from "react-redux";
 import CopilotChat from "./copilot-chat";
 import CopilotHeader from "./copilot-header";
 import CopilotWelcome from "./copilot-welcome";
-import SupportChatWidget, { showSupportChat, useSupportChatInProgress } from "./support-chat-widget";
+import SupportChatWidget from "./support-chat-widget";
 import useCopilotPanel from "../hooks/use-copilot-panel";
 import { CopilotContentType } from "../store/types/copilot-action-types";
 
@@ -79,8 +77,6 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
         loadHistory
     } = useCopilotPanel();
 
-    const supportChatInProgress: boolean = useSupportChatInProgress();
-
     /**
      * Load chat history when panel becomes visible.
      */
@@ -95,14 +91,6 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
      */
     const handleClose: () => void = useCallback(() => {
         hidePanel();
-    }, [ hidePanel ]);
-
-    /**
-     * Switch from Ask AI back to the support chat in progress.
-     */
-    const handleOpenSupportChat: () => void = useCallback(() => {
-        hidePanel();
-        showSupportChat();
     }, [ hidePanel ]);
 
     /**
@@ -224,26 +212,6 @@ const CopilotPanel: React.FunctionComponent<CopilotPanelProps> = (
                         isExpanded={ isExpanded }
                         data-componentid={ `${componentId}-header` }
                     />
-
-                    { supportChatInProgress && (
-                        <Alert
-                            severity="info"
-                            action={ (
-                                <Button
-                                    color="inherit"
-                                    size="small"
-                                    onClick={ handleOpenSupportChat }
-                                    data-componentid={ `${componentId}-open-support-chat` }
-                                >
-                                    { t("console:common.copilot.escalation.openChat") }
-                                </Button>
-                            ) }
-                            sx={ { borderRadius: 0 } }
-                            data-componentid={ `${componentId}-support-chat-in-progress` }
-                        >
-                            { t("console:common.copilot.escalation.inProgress") }
-                        </Alert>
-                    ) }
 
                     <Box
                         sx={ {

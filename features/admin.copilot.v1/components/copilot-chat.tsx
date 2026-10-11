@@ -20,7 +20,6 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import HistoryIcon from "@mui/icons-material/History";
 import { Theme, alpha, styled } from "@mui/material/styles";
 import Box from "@oxygen-ui/react/Box";
-import Button from "@oxygen-ui/react/Button";
 import CircularProgress from "@oxygen-ui/react/CircularProgress";
 import IconButton from "@oxygen-ui/react/IconButton";
 import Paper from "@oxygen-ui/react/Paper";
@@ -30,7 +29,7 @@ import Typography from "@oxygen-ui/react/Typography";
 import { IdentifiableComponentInterface } from "@wso2is/core/models";
 import { DocumentationLink, Markdown, useDocumentation } from "@wso2is/react-components";
 import React, {
-    Component, ReactElement, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState
+    Component, ReactElement, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState
 } from "react";
 import { useTranslation } from "react-i18next";
 import AISparkleIcon from "./ai-sparkle-icon";
@@ -40,12 +39,7 @@ import {
     StyledLoadMoreButton,
     StyledSuggestionButton
 } from "./copilot-styles";
-import {
-    CHARS_PER_FRAME,
-    MAX_INPUT_LENGTH,
-    MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION,
-    TYPING_SPEED_MS
-} from "../constants/copilot-chat-constants";
+import { CHARS_PER_FRAME, MAX_INPUT_LENGTH, TYPING_SPEED_MS } from "../constants/copilot-chat-constants";
 import useCopilotPanel from "../hooks/use-copilot-panel";
 import { CopilotMessageInterface } from "../store/types/copilot-action-types";
 
@@ -289,14 +283,6 @@ interface ChatMessageProps {
     componentId: string;
     onSendMessage: (msg: string) => void;
     onAnimatedContentChange: () => void;
-    /** Opens the support chat with the Ask AI conversation so far. */
-    onEscalate: () => void;
-    /**
-     * True once at least MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION Ask AI
-     * attempts in a row have failed -- "Chat with an Engineer" is only
-     * offered on this message once this is true, not on the first error.
-     */
-    canEscalate: boolean;
 }
 
 
@@ -313,9 +299,7 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
         isLoading: loading,
         componentId,
         onSendMessage,
-        onAnimatedContentChange,
-        onEscalate,
-        canEscalate
+        onAnimatedContentChange
     }: ChatMessageProps): ReactElement => {
         const { t } = useTranslation();
         const isUser: boolean = message.sender === "user";
@@ -456,19 +440,6 @@ const ChatMessage: React.FunctionComponent<ChatMessageProps> = React.memo(
                         </MessageErrorBoundary>
                     </StyledBotMessageBubble>
 
-                    { isError && isLastMessage && canEscalate && (
-                        <Box sx={ { mt: 1 } }>
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={ onEscalate }
-                                data-componentid={ `${componentId}-chat-with-engineer` }
-                            >
-                                { t("console:common.copilot.escalation.chatWithEngineer") }
-                            </Button>
-                        </Box>
-                    ) }
-
                     { !isError && isLastMessage && (
                         <>
                             { message.suggestionsLoading && !message.suggestions && (
@@ -537,35 +508,8 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
         statusMessage,
         hasMoreHistory,
         isLoadingMoreHistory,
-        loadMoreHistory,
-        escalateToEngineer
+        loadMoreHistory
     } = useCopilotPanel();
-
-    /**
-     * How many Ask AI attempts in a row have ended in an error, counting
-     * back from the most recent message and skipping over the user's own
-     * messages (a user message never breaks the streak; a non-error bot
-     * reply does). "Chat with an Engineer" is offered only once this
-     * reaches MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION -- not on the very
-     * first error.
-     */
-    const canEscalate: boolean = useMemo((): boolean => {
-        let consecutiveErrors: number = 0;
-
-        for (let i: number = messages.length - 1; i >= 0; i--) {
-            const message: CopilotMessageInterface = messages[i];
-
-            if (message.sender === "user") {
-                continue;
-            }
-            if (message.type !== "error") {
-                break;
-            }
-            consecutiveErrors++;
-        }
-
-        return consecutiveErrors >= MIN_CONSECUTIVE_ERRORS_FOR_ESCALATION;
-    }, [ messages ]);
 
     const [ inputValue, setInputValue ] = useState<string>("");
     const messagesEndRef: React.RefObject<HTMLDivElement> = useRef<HTMLDivElement>(null);
@@ -765,8 +709,6 @@ const CopilotChat: React.FunctionComponent<CopilotChatProps> = (
                             componentId={ componentId }
                             onSendMessage={ sendMessage }
                             onAnimatedContentChange={ handleAnimatedContentChange }
-                            onEscalate={ escalateToEngineer }
-                            canEscalate={ canEscalate }
                         />
                     ))
                 ) }

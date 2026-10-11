@@ -16,15 +16,11 @@
  * under the License.
  */
 
-import type { LiveChatPriorMessage } from "@wso2/live-chat-widget";
 import { AppState } from "@wso2is/admin.core.v1/store";
 import { useCallback } from "react";
-import { useTranslation } from "react-i18next";
 import { useDispatch, useSelector } from "react-redux";
 import { AnyAction } from "redux";
 import { ThunkDispatch } from "redux-thunk";
-import { openSupportChat } from "../components/support-chat-widget";
-import { MAX_ESCALATION_CONTEXT_MESSAGES } from "../constants/copilot-chat-constants";
 import {
     addCopilotMessage,
     clearCopilotChatWithApi,
@@ -117,10 +113,6 @@ interface UseCopilotPanelInterface {
      * The current status message (agent step progress), or null.
      */
     statusMessage: string | null;
-    /**
-     * Function to hand the conversation over to a support engineer.
-     */
-    escalateToEngineer: () => void;
 }
 
 /**
@@ -131,7 +123,6 @@ interface UseCopilotPanelInterface {
  */
 const useCopilotPanel = (): UseCopilotPanelInterface => {
     const dispatch: AppDispatch = useDispatch<AppDispatch>();
-    const { t } = useTranslation();
     const copilotState: CopilotPanelStateInterface = useSelector((state: AppState) => state.copilot);
 
     const showPanel: () => void = useCallback(() => {
@@ -153,34 +144,6 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
     const sendMessage: (message: string) => void = useCallback((message: string) => {
         dispatch(sendCopilotMessage(message));
     }, [ dispatch ]);
-
-    /**
-     * Hand over to a support engineer: hides Ask AI and opens the support
-     * chat with the latest Ask AI turns, so the engineer sees what was
-     * already tried. Says so in Ask AI when live chat is not configured.
-     */
-    const escalateToEngineer: () => void = useCallback(() => {
-        const priorMessages: LiveChatPriorMessage[] = (copilotState?.messages ?? [])
-            .slice(-MAX_ESCALATION_CONTEXT_MESSAGES)
-            .map((message: CopilotMessageInterface): LiveChatPriorMessage => ({
-                content: message.content,
-                role: message.sender === "user" ? "customer" : "assistant"
-            }));
-
-        if (openSupportChat(priorMessages)) {
-            dispatch(setCopilotPanelVisibility(false));
-
-            return;
-        }
-
-        dispatch(addCopilotMessage({
-            content: t("console:common.copilot.escalation.unavailable"),
-            id: `escalation-unavailable-${Date.now()}`,
-            sender: "copilot",
-            timestamp: Date.now(),
-            type: "error"
-        }));
-    }, [ dispatch, copilotState?.messages, t ]);
 
     const addMessage: (message: CopilotMessageInterface) => void = useCallback((message: CopilotMessageInterface) => {
         dispatch(addCopilotMessage(message));
@@ -214,7 +177,6 @@ const useCopilotPanel = (): UseCopilotPanelInterface => {
         addMessage,
         clearChat,
         contentType: copilotState?.contentType ?? CopilotContentType.CHAT,
-        escalateToEngineer,
         hasMoreHistory: copilotState?.hasMoreHistory ?? false,
         hidePanel,
         isLoading: copilotState?.isLoading ?? false,

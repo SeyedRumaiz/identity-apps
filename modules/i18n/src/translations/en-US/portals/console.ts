@@ -412,12 +412,6 @@ export const console: ConsoleNS = {
                 requestCancelled: "Request was cancelled.",
                 timeout: "The request is taking longer than expected. Please try again."
             },
-            escalation: {
-                chatWithEngineer: "Chat with an Engineer",
-                unavailable: "Chat with an engineer is not available right now.",
-                inProgress: "You have an open chat with a support engineer.",
-                openChat: "Open chat"
-            },
             status: {
                 submitting: "Submitting your question..."
             },

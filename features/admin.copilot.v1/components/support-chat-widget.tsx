@@ -15,89 +15,51 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
-import {
-    LIVE_CHAT_EVENTS,
-    type LiveChatPriorMessage,
-    type LiveChatWidgetElement
-} from "@wso2/live-chat-widget";
-import { FunctionComponent, useEffect, useState } from "react";
-import { useDispatch } from "react-redux";
-import { Dispatch } from "redux";
+import { LIVE_CHAT_EVENTS, type LiveChatWidgetElement } from "@wso2/live-chat-widget";
+import { FunctionComponent, useCallback, useEffect, useState } from "react";
 import liveChatConfig from "./live-chat.config.json";
 import { getSupportEscalationBaseUrl, liveChatTransport } from "../api/live-chat-transport";
-import { setCopilotPanelVisibility } from "../store/actions/copilot";
-
-/** Long enough to read "The engineer ended the chat." before Ask AI returns. */
-const RETURN_TO_ASK_AI_DELAY_MS: number = 2500;
 
 let mountedWidget: LiveChatWidgetElement | null = null;
 
 /**
- * Opens the support chat with the Ask AI conversation so far. Returns false
- * when live chat is not configured for this deployment.
+ * The header's AI button: whether the support assistant panel is open, and
+ * a toggle for it. The panel replaces the Ask AI drawer for now.
  *
- * @param priorMessages - Ask AI turns to share with the engineer.
- * @returns Whether the chat could be opened.
+ * @returns The panel's open state and a toggle.
  */
-export const openSupportChat = (priorMessages: LiveChatPriorMessage[]): boolean => {
-    if (!mountedWidget) {
-        return false;
-    }
-    mountedWidget.open({ priorMessages });
-
-    return true;
-};
-
-/**
- * Opens the support chat as it is, for returning to a chat in progress.
- */
-export const showSupportChat = (): void => {
-    mountedWidget?.open();
-};
-
-/**
- * Tracks whether a support chat is in progress (waiting for or talking to an
- * engineer), so Ask AI can offer a way back to it.
- *
- * @returns True while a chat is in progress.
- */
-export const useSupportChatInProgress = (): boolean => {
-    const [ inProgress, setInProgress ] = useState<boolean>(false);
+export const useSupportChatPanel = (): { isOpen: boolean; toggle: () => void } => {
+    const [ isOpen, setIsOpen ] = useState<boolean>(mountedWidget?.state.open ?? false);
 
     useEffect(() => {
-        const update = (): void => {
-            const phase: string | undefined = mountedWidget?.state.phase;
+        const onOpen = (): void => setIsOpen(true);
+        const onClose = (): void => setIsOpen(false);
 
-            setInProgress(phase === "queued" || phase === "connected");
-        };
-
-        update();
-        document.addEventListener(LIVE_CHAT_EVENTS.started, update);
-        document.addEventListener(LIVE_CHAT_EVENTS.resumed, update);
-        document.addEventListener(LIVE_CHAT_EVENTS.ended, update);
+        document.addEventListener(LIVE_CHAT_EVENTS.open, onOpen);
+        document.addEventListener(LIVE_CHAT_EVENTS.close, onClose);
 
         return () => {
-            document.removeEventListener(LIVE_CHAT_EVENTS.started, update);
-            document.removeEventListener(LIVE_CHAT_EVENTS.resumed, update);
-            document.removeEventListener(LIVE_CHAT_EVENTS.ended, update);
+            document.removeEventListener(LIVE_CHAT_EVENTS.open, onOpen);
+            document.removeEventListener(LIVE_CHAT_EVENTS.close, onClose);
         };
     }, []);
 
-    return inProgress;
+    const toggle: () => void = useCallback(() => {
+        mountedWidget?.toggle();
+    }, []);
+
+    return { isOpen, toggle };
 };
 
 /**
- * Mounts the shared wso2-live-chat web component once. Its look lives in
+ * Mounts the shared wso2-live-chat web component once: the AI assistant
+ * first, then a support engineer in the same panel. Its look lives in
  * live-chat.config.json; this component supplies what JSON cannot hold: the
- * bridge URL from the runtime configuration, the auth transport, and the
- * return to Ask AI when a chat ends.
+ * bridge URL from the runtime configuration and the auth transport.
  *
  * @returns Nothing visible; the web component renders itself.
  */
 const SupportChatWidget: FunctionComponent = (): null => {
-    const dispatch: Dispatch = useDispatch();
-
     useEffect(() => {
         const bridgeUrl: string = getSupportEscalationBaseUrl();
 
@@ -112,29 +74,13 @@ const SupportChatWidget: FunctionComponent = (): null => {
         document.body.appendChild(widget);
         mountedWidget = widget;
 
-        let returnTimer: ReturnType<typeof setTimeout> | undefined;
-        const onEnded = (): void => {
-            // Only switch back when the customer is looking at the chat.
-            if (!widget.state.open) {
-                return;
-            }
-            returnTimer = setTimeout(() => {
-                widget.close();
-                dispatch(setCopilotPanelVisibility(true));
-            }, RETURN_TO_ASK_AI_DELAY_MS);
-        };
-
-        widget.addEventListener(LIVE_CHAT_EVENTS.ended, onEnded);
-
         return () => {
-            clearTimeout(returnTimer);
-            widget.removeEventListener(LIVE_CHAT_EVENTS.ended, onEnded);
             if (mountedWidget === widget) {
                 mountedWidget = null;
             }
             widget.remove();
         };
-    }, [ dispatch ]);
+    }, []);
 
     return null;
 };

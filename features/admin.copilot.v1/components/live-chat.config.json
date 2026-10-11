@@ -10,6 +10,7 @@
         "borderRadius": "8px"
     },
     "texts": {
-        "title": "Chat with an Engineer"
+        "title": "Ask AI",
+        "subtitle": "Ask the AI assistant or chat with a support engineer"
     }
 }
