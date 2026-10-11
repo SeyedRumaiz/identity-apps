@@ -1,6 +1,6 @@
 # Vendored packages
 
-`wso2-live-chat-widget-0.1.4.tgz` is `@wso2/live-chat-widget`, the
+`wso2-live-chat-widget-0.2.0.tgz` is `@wso2/live-chat-widget`, the
 `<wso2-live-chat>` web component for console-chat-bridge's live-engineer
 chat, packed from `cs-tools/apps/live-chat-sdk/widget` with `pnpm pack`. It
 bundles `@wso2/live-chat-client`, so nothing else needs installing.
