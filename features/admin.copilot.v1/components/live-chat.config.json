@@ -9,6 +9,13 @@
         "fontFamily": "Gilmer, sans-serif",
         "borderRadius": "8px"
     },
+    "assistant": {
+        "suggestions": [
+            "How do I add social login to my app?",
+            "How do I enable MFA for users?",
+            "How do I set up SSO for an application?"
+        ]
+    },
     "texts": {
         "title": "Ask AI",
         "subtitle": "Ask the AI assistant or chat with a support engineer"
